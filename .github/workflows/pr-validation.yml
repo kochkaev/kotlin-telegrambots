@@ -22,5 +22,8 @@ jobs:
         with:
           gradle-version: wrapper
 
+      - name: Make Gradle wrapper executable
+        run: chmod +x ./gradlew
+
       - name: Run build to validate changes
         run: ./gradlew build --no-daemon
