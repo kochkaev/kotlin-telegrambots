@@ -1,0 +1,55 @@
+name: Check for TelegramBots Updates
+
+on:
+  schedule:
+    # Runs once a day at midnight UTC
+    - cron: '0 0 * * *'
+  workflow_dispatch: # Allows manual triggering
+
+jobs:
+  check-updates:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Get latest TelegramBots version
+        id: get_version
+        run: |
+          LATEST_VERSION=$(curl -s "https://search.maven.org/solrsearch/select?q=g:%22org.telegram%22+AND+a:%22telegrambots%22&core=gav&rows=1&wt=json" | jq -r '.response.docs[0].v')
+          echo "Latest version on Maven Central: $LATEST_VERSION"
+          echo "LATEST_VERSION=$LATEST_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Get current version from gradle.properties
+        id: get_current_version
+        run: |
+          CURRENT_VERSION=$(grep 'telegrambotsVersion' gradle.properties | cut -d'=' -f2)
+          echo "Current version in gradle.properties: $CURRENT_VERSION"
+          echo "CURRENT_VERSION=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Compare versions and update if needed
+        if: steps.get_version.outputs.LATEST_VERSION != steps.get_current_version.outputs.CURRENT_VERSION
+        run: |
+          echo "New version found! Updating gradle.properties..."
+          sed -i "s/telegrambotsVersion=.*/telegrambotsVersion=${{ steps.get_version.outputs.LATEST_VERSION }}/" gradle.properties
+          echo "gradle.properties updated."
+          
+          # Configure Git
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          
+          # Create a new branch, commit, and push
+          BRANCH_NAME="bot/bump-telegrambots-to-${{ steps.get_version.outputs.LATEST_VERSION }}"
+          git checkout -b $BRANCH_NAME
+          git add gradle.properties
+          git commit -m "build: Bump telegrambots version to ${{ steps.get_version.outputs.LATEST_VERSION }}"
+          git push origin $BRANCH_NAME
+          
+          # Create a Pull Request
+          gh pr create --title "build: Bump telegrambots version to ${{ steps.get_version.outputs.LATEST_VERSION }}" --body "Automated PR to update the TelegramBots dependency to the latest version." --base main
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: No update needed
+        if: steps.get_version.outputs.LATEST_VERSION == steps.get_current_version.outputs.CURRENT_VERSION
+        run: echo "TelegramBots version is up to date."

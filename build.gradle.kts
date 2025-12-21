@@ -69,7 +69,7 @@ publishing {
         create<MavenPublication>("mavenJava") {
             groupId = "ru.kochkaev.kotlin"
             artifactId = "telegrambots"
-            version = projectVersion
+            version = "$projectVersion-$telegrambotsVersion"
 
             from(components["java"])
 
