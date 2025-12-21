@@ -1,13 +1,16 @@
 name: Build and Release
 
 on:
-  workflow_dispatch: # Allows manual triggering from the Actions tab
+  push:
+    branches:
+      - main
+  workflow_dispatch:
 
 jobs:
   build-and-release:
     runs-on: ubuntu-latest
     permissions:
-      contents: write # Grant permissions to push tags and create releases
+      contents: write
       
     steps:
       - name: Checkout repository
@@ -31,13 +34,14 @@ jobs:
         id: create_tag
         run: |
           TAG_NAME="${{ steps.get_versions.outputs.TAG_NAME }}"
-          echo "Creating and pushing tag: $TAG_NAME"
+          echo "Attempting to create and push tag: $TAG_NAME"
           if git rev-parse "$TAG_NAME" >/dev/null 2>&1; then
-            echo "Tag $TAG_NAME already exists. Aborting."
-            exit 1 # Exit with an error to stop the workflow
+            echo "Tag $TAG_NAME already exists. Skipping tag creation."
+          else
+            git tag $TAG_NAME
+            git push origin $TAG_NAME
+            echo "Successfully created and pushed tag $TAG_NAME."
           fi
-          git tag $TAG_NAME
-          git push origin $TAG_NAME
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -58,15 +62,14 @@ jobs:
       - name: Build with Gradle
         run: ./gradlew assemble --no-daemon
 
-      - name: Create Release and Upload Artifacts
+      - name: Create or Update Release and Upload Artifacts
         uses: softprops/action-gh-release@v1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           tag_name: ${{ steps.get_versions.outputs.TAG_NAME }}
           name: Release ${{ steps.get_versions.outputs.TAG_NAME }}
-          body: "Automated release based on versions from gradle.properties."
-          draft: false
-          prerelease: false
+          body: "Automated release."
+          make_latest: true
           files: |
             build/libs/*.jar
         env:

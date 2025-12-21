@@ -2,9 +2,8 @@ name: Check for TelegramBots Updates
 
 on:
   schedule:
-    # Runs once a day at midnight UTC
     - cron: '0 0 * * *'
-  workflow_dispatch: # Allows manual triggering
+  workflow_dispatch:
 
 jobs:
   check-updates:
@@ -34,19 +33,17 @@ jobs:
           sed -i "s/telegrambotsVersion=.*/telegrambotsVersion=${{ steps.get_version.outputs.LATEST_VERSION }}/" gradle.properties
           echo "gradle.properties updated."
           
-          # Configure Git
           git config --global user.name 'github-actions[bot]'
           git config --global user.email 'github-actions[bot]@users.noreply.github.com'
           
-          # Create a new branch, commit, and push
-          BRANCH_NAME="bot/bump-telegrambots-to-${{ steps.get_version.outputs.LATEST_VERSION }}"
-          git checkout -b $BRANCH_NAME
+          PR_BRANCH_NAME="bot/bump-telegrambots-to-${{ steps.get_version.outputs.LATEST_VERSION }}"
+          git checkout -b $PR_BRANCH_NAME
+          
           git add gradle.properties
           git commit -m "build: Bump telegrambots version to ${{ steps.get_version.outputs.LATEST_VERSION }}"
-          git push origin $BRANCH_NAME
+          git push origin $PR_BRANCH_NAME
           
-          # Create a Pull Request
-          gh pr create --title "build: Bump telegrambots version to ${{ steps.get_version.outputs.LATEST_VERSION }}" --body "Automated PR to update the TelegramBots dependency to the latest version." --base main
+          gh pr create --title "build: Bump telegrambots version to ${{ steps.get_version.outputs.LATEST_VERSION }}" --body "Automated PR to update the TelegramBots dependency." --base main
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
