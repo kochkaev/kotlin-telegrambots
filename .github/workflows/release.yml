@@ -4,11 +4,13 @@ on:
   push:
     tags:
       - 'v*' # Trigger the workflow on version tags like v1.0.0, v1.2.3-7.0.0, etc.
-  workflow_dispatch: # Allows manual triggering
 
 jobs:
   build-and-release:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
@@ -28,12 +30,11 @@ jobs:
         run: chmod +x ./gradlew
 
       - name: Build with Gradle
-        run: ./gradlew build --no-daemon
+        run: ./gradlew assemble --no-daemon
 
-      - name: Create Release and Upload Artifact
+      - name: Create Release and Upload Artifacts
         uses: softprops/action-gh-release@v1
         with:
-          # This token is provided by Actions, you do not need to create your own secret
           token: ${{ secrets.GITHUB_TOKEN }}
           tag_name: ${{ github.ref }}
           name: Release ${{ github.ref_name }}
@@ -42,6 +43,5 @@ jobs:
           prerelease: false
           files: |
             build/libs/*.jar
-            build/libs/*-sources.jar
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

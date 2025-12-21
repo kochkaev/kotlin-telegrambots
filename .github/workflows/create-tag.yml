@@ -1,0 +1,42 @@
+name: Create and Push Tag from Properties
+
+on:
+  workflow_dispatch: # Allows manual triggering
+
+jobs:
+  create-tag:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Grant permissions to push a tag
+      
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Read versions from gradle.properties
+        id: get_versions
+        run: |
+          PROJECT_VERSION=$(grep 'projectVersion' gradle.properties | cut -d'=' -f2)
+          TELEGRAM_VERSION=$(grep 'telegrambotsVersion' gradle.properties | cut -d'=' -f2)
+          TAG_NAME="v${PROJECT_VERSION}-${TELEGRAM_VERSION}"
+          echo "Generated tag name: $TAG_NAME"
+          echo "TAG_NAME=$TAG_NAME" >> $GITHUB_OUTPUT
+
+      - name: Configure Git
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+
+      - name: Create and Push Tag
+        run: |
+          TAG_NAME="${{ steps.get_versions.outputs.TAG_NAME }}"
+          echo "Creating and pushing tag: $TAG_NAME"
+          # Check if tag already exists
+          if git rev-parse "$TAG_NAME" >/dev/null 2>&1; then
+            echo "Tag $TAG_NAME already exists. Skipping."
+            exit 0
+          fi
+          git tag $TAG_NAME
+          git push origin $TAG_NAME
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
