@@ -1,4 +1,6 @@
 import com.github.javaparser.StaticJavaParser
+import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration
+import com.github.javaparser.ast.body.FieldDeclaration
 import com.squareup.kotlinpoet.*
 import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
 import org.gradle.api.DefaultTask
@@ -47,6 +49,20 @@ abstract class GenerateExtensionsTask : DefaultTask() {
         return methods
     }
 
+    private fun getAllFields(clazz: Class<*>): Map<String, Field> {
+        val fields = mutableMapOf<String, Field>()
+        var currentClass: Class<*>? = clazz
+        while (currentClass != null && currentClass != Object::class.java) {
+            currentClass.declaredFields.forEach {
+                if (!fields.containsKey(it.name)) {
+                    fields[it.name] = it
+                }
+            }
+            currentClass = currentClass.superclass
+        }
+        return fields
+    }
+
     private fun <T> cartesianProduct(lists: List<List<T>>): List<List<T>> {
         if (lists.isEmpty()) return listOf(emptyList())
         val head = lists.first()
@@ -90,8 +106,12 @@ abstract class GenerateExtensionsTask : DefaultTask() {
     fun execute() {
         logger.warn("--- Starting Telegram Bot Extension Generation (Final Strategy) ---")
 
-        val fileSpecBuilder = FileSpec.builder("ru.kochkaev.kotlin.telegrambots", "TelegramBotExtensions")
+        val fileSpecBuilder = FileSpec.builder("io.github.kochkaev.kotlin.telegrambots", "TelegramBotExtensions")
             .addImport("kotlinx.coroutines.future", "await")
+            .addAnnotation(AnnotationSpec.builder(Suppress::class)
+                .useSiteTarget(AnnotationSpec.UseSiteTarget.FILE)
+                .addMember("%S, %S", "unused", "RedundantVisibilityModifier")
+                .build())
 
         val classLoader = BotApiMethod::class.java.classLoader
         val reflections = Reflections(ConfigurationBuilder()
@@ -109,13 +129,13 @@ abstract class GenerateExtensionsTask : DefaultTask() {
 
         allApiMethodClasses.forEach { clazz ->
             if (clazz.isAnonymousClass || Modifier.isAbstract(clazz.modifiers) || !Modifier.isPublic(clazz.modifiers)) return@forEach
-            try { clazz.getConstructor() } catch (e: NoSuchMethodException) { return@forEach }
+            try { clazz.getConstructor() } catch (_: NoSuchMethodException) { return@forEach }
 
             val sourceFile = sourceFilesMap[clazz.simpleName] ?: return@forEach
             val cu = StaticJavaParser.parse(sourceFile)
-            val classDecl = cu.findFirst(com.github.javaparser.ast.body.ClassOrInterfaceDeclaration::class.java) { it.nameAsString == clazz.simpleName }.orElse(null) ?: return@forEach
+            val classDecl = cu.findFirst(ClassOrInterfaceDeclaration::class.java) { it.nameAsString == clazz.simpleName }.orElse(null) ?: return@forEach
             
-            val fieldsWithNonNull = classDecl.findAll(com.github.javaparser.ast.body.FieldDeclaration::class.java)
+            val fieldsWithNonNull = classDecl.findAll(FieldDeclaration::class.java)
                 .filter { field -> field.annotations.any { it.name.identifier == "NonNull" } }
                 .map { it.variables.first().nameAsString }
                 .toSet()
@@ -123,6 +143,7 @@ abstract class GenerateExtensionsTask : DefaultTask() {
             val returnType = findBotApiMethodReturnType(clazz) ?: return@forEach
             val functionName = clazz.simpleName.replaceFirstChar { it.lowercase() }
             
+            val fieldsByName = getAllFields(clazz)
             val setters = getAllMethods(clazz)
                 .filter { it.name.startsWith("set") && it.parameterCount == 1 && Modifier.isPublic(it.modifiers) }
                 .groupBy { it.name.substring(3).replaceFirstChar { c -> c.lowercase() } }
@@ -165,19 +186,40 @@ abstract class GenerateExtensionsTask : DefaultTask() {
                     .addParameters(optionalParams)
                     .addStatement("val apiMethod = %T()", clazz.asTypeName())
 
-                (requiredParams + optionalParams).forEach { param ->
-                    val setterName = "set" + param.name.replaceFirstChar { it.uppercase() }
-                    if (param.type.isNullable) {
-                        funSpecBuilder.addCode(
-                            CodeBlock.builder()
-                                .beginControlFlow("if (${param.name} != null)")
-                                .addStatement("apiMethod.$setterName(${param.name})")
-                                .endControlFlow()
-                                .build()
-                        )
+                val classDeprecation = clazz.getAnnotation(Deprecated::class.java)
+                val deprecatedSettersInCombination = combination.filter { it.isAnnotationPresent(Deprecated::class.java) }
+                
+                if (classDeprecation != null || deprecatedSettersInCombination.isNotEmpty()) {
+                    val message = classDeprecation?.message ?: "This method uses deprecated parameters."
+                    funSpecBuilder.addAnnotation(AnnotationSpec.builder(Deprecated::class)
+                        .addMember("message = %S", message)
+                        .build())
+                }
+
+                combination.forEach { setter ->
+                    val propertyName = setter.name.substring(3).replaceFirstChar { it.lowercase() }
+                    val field = fieldsByName[propertyName]
+                    val usePropertyAccess = field != null && setter.parameterTypes[0] == field.type
+                    if (usePropertyAccess) {
+                        funSpecBuilder.addStatement("apiMethod.$propertyName = $propertyName")
                     } else {
-                        funSpecBuilder.addStatement("apiMethod.$setterName(${param.name})")
+                        funSpecBuilder.addStatement("apiMethod.${setter.name}($propertyName)")
                     }
+                }
+
+                optionalSetters.forEach { (propertyName, setterGroup) ->
+                    val representativeSetter = setterGroup.first()
+                    val field = fieldsByName[propertyName]
+                    val usePropertyAccess = field != null && representativeSetter.parameterTypes[0] == field.type
+
+                    val block = CodeBlock.builder().beginControlFlow("if ($propertyName != null)")
+                    if (usePropertyAccess) {
+                        block.addStatement("apiMethod.$propertyName = $propertyName")
+                    } else {
+                        block.addStatement("apiMethod.${representativeSetter.name}($propertyName)")
+                    }
+                    block.endControlFlow()
+                    funSpecBuilder.addCode(block.build())
                 }
 
                 if (finalReturnType == UNIT) {

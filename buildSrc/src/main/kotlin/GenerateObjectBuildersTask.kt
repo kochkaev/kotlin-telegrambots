@@ -10,6 +10,7 @@ import org.reflections.Reflections
 import org.reflections.scanners.Scanners
 import org.reflections.util.ConfigurationBuilder
 import org.telegram.telegrambots.meta.api.interfaces.BotApiObject
+import java.lang.reflect.Field
 import java.lang.reflect.Method
 import java.lang.reflect.Modifier
 
@@ -29,6 +30,20 @@ abstract class GenerateObjectBuildersTask : DefaultTask() {
             currentClass = currentClass.superclass
         }
         return methods
+    }
+
+    private fun getAllFields(clazz: Class<*>): Map<String, Field> {
+        val fields = mutableMapOf<String, Field>()
+        var currentClass: Class<*>? = clazz
+        while (currentClass != null && currentClass != Object::class.java) {
+            currentClass.declaredFields.forEach {
+                if (!fields.containsKey(it.name)) {
+                    fields[it.name] = it
+                }
+            }
+            currentClass = currentClass.superclass
+        }
+        return fields
     }
 
     private val javaToKotlinMap = mapOf(
@@ -64,7 +79,11 @@ abstract class GenerateObjectBuildersTask : DefaultTask() {
     fun execute() {
         logger.warn("--- Starting Object Builder Function Generation (Setter-based Strategy) ---")
 
-        val fileSpecBuilder = FileSpec.builder("ru.kochkaev.kotlin.telegrambots", "ObjectBuilders")
+        val fileSpecBuilder = FileSpec.builder("io.github.kochkaev.kotlin.telegrambots", "ObjectBuilders")
+            .addAnnotation(AnnotationSpec.builder(Suppress::class)
+                .useSiteTarget(AnnotationSpec.UseSiteTarget.FILE)
+                .addMember("%S, %S", "unused", "RedundantVisibilityModifier")
+                .build())
 
         val classLoader = BotApiObject::class.java.classLoader
         val reflections = Reflections(ConfigurationBuilder()
@@ -95,6 +114,7 @@ abstract class GenerateObjectBuildersTask : DefaultTask() {
 
             val functionName = clazz.simpleName.replaceFirstChar { it.lowercase() }
             
+            val fieldsByName = getAllFields(clazz)
             val setters = getAllMethods(clazz)
                 .filter { it.name.startsWith("set") && it.parameterCount == 1 && Modifier.isPublic(it.modifiers) }
                 .associateBy { it.name.substring(3).replaceFirstChar { c -> c.lowercase() } }
@@ -119,18 +139,33 @@ abstract class GenerateObjectBuildersTask : DefaultTask() {
                 .addParameters(requiredParams + optionalParams)
                 .addStatement("val obj = %T()", clazz.asTypeName())
 
+            val classDeprecation = clazz.getAnnotation(Deprecated::class.java)
+            if (classDeprecation != null) {
+                funSpecBuilder.addAnnotation(AnnotationSpec.builder(Deprecated::class)
+                    .addMember("message = %S", classDeprecation.message)
+                    .build())
+            }
+
             (requiredParams + optionalParams).forEach { param ->
-                val setterName = "set" + param.name.replaceFirstChar { it.uppercase() }
+                val setter = setters[param.name]!!
+                val field = fieldsByName[param.name]
+                val usePropertyAccess = field != null && setter.parameterTypes[0] == field.type
+
                 if (param.type.isNullable) {
-                    funSpecBuilder.addCode(
-                        CodeBlock.builder()
-                            .beginControlFlow("if (${param.name} != null)")
-                            .addStatement("obj.$setterName(${param.name})")
-                            .endControlFlow()
-                            .build()
-                    )
+                    val block = CodeBlock.builder().beginControlFlow("if (${param.name} != null)")
+                    if (usePropertyAccess) {
+                        block.addStatement("obj.${param.name} = ${param.name}")
+                    } else {
+                        block.addStatement("obj.${setter.name}(${param.name})")
+                    }
+                    block.endControlFlow()
+                    funSpecBuilder.addCode(block.build())
                 } else {
-                    funSpecBuilder.addStatement("obj.$setterName(${param.name})")
+                    if (usePropertyAccess) {
+                        funSpecBuilder.addStatement("obj.${param.name} = ${param.name}")
+                    } else {
+                        funSpecBuilder.addStatement("obj.${setter.name}(${param.name})")
+                    }
                 }
             }
             
