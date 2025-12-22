@@ -32,7 +32,7 @@ Add the library to your project's dependencies.
 ```kotlin
 // build.gradle.kts
 dependencies {
-    implementation("ru.kochkaev.kotlin:telegrambots:1.0.0")
+    implementation("io.github.kochkaev:kotlin-telegrambots:1.0.2-6.9.7.1")
 }
 ```
 
@@ -41,7 +41,7 @@ dependencies {
 ```groovy
 // build.gradle
 dependencies {
-    implementation 'ru.kochkaev.kotlin:telegrambots:1.0.0'
+    implementation 'io.github.kochkaev:kotlin-telegrambots:1.0.2-6.9.7.1'
 }
 ```
 
@@ -50,9 +50,9 @@ dependencies {
 ```xml
 <!-- pom.xml -->
 <dependency>
-    <groupId>ru.kochkaev.kotlin</groupId>
-    <artifactId>telegrambots</artifactId>
-    <version>1.0.0</version>
+    <groupId>io.github.kochkaev</groupId>
+    <artifactId>kotlin-telegrambots</artifactId>
+    <version>1.0.2-6.9.7.1</version>
 </dependency>
 ```
 
@@ -131,5 +131,4 @@ Contributions are welcome! If you find a bug or have a feature request, please o
 
 ## License
 
-This project is licensed under the Apache 2.0 License. See the [LICENSE](LICENSE) file for details.
-```
+This project is licensed under the Apache 2.0 License. See the [LICENSE](LICENSE.txt) file for details.

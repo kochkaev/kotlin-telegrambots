@@ -14,10 +14,8 @@ dependencies {
 
 plugins {
     id("org.jetbrains.kotlin.jvm") version "1.9.22"
-    id("io.github.gradle-nexus.publish-plugin") version "2.0.0"
+    id("com.vanniktech.maven.publish") version "0.28.0"
     `java-library`
-    `maven-publish`
-    signing
 }
 
 repositories {
@@ -88,60 +86,33 @@ kotlin {
     jvmToolchain(17)
 }
 
-publishing {
-    publications {
-        create<MavenPublication>("mavenJava") {
-            from(components["java"])
+mavenPublishing {
+    publishToMavenCentral(com.vanniktech.maven.publish.SonatypeHost.S01)
+    signAllPublications()
 
-            pom {
-                name.set("Kotlin Telegram Bots Extensions")
-                description.set("A library providing Kotlin extension functions for the TelegramBots API.")
-                url.set("https://github.com/kochkaev/kotlin-telegrambots")
+    pom {
+        name.set("Kotlin Telegram Bots Extensions")
+        description.set("A library providing Kotlin extension functions for the TelegramBots API.")
+        url.set("https://github.com/kochkaev/kotlin-telegrambots")
 
-                licenses {
-                    license {
-                        name.set("The Apache License, Version 2.0")
-                        url.set("http://www.apache.org/licenses/LICENSE-2.0.txt")
-                    }
-                }
-                developers {
-                    developer {
-                        id.set("kochkaev")
-                        name.set("Dmitrii Kochkaev")
-                    }
-                }
-                scm {
-                    connection.set("scm:git:git://github.com/kochkaev/kotlin-telegrambots.git")
-                    developerConnection.set("scm:git:ssh://github.com/kochkaev/kotlin-telegrambots.git")
-                    url.set("https://github.com/kochkaev/kotlin-telegrambots/tree/main")
-                }
+        licenses {
+            license {
+                name.set("The Apache License, Version 2.0")
+                url.set("http://www.apache.org/licenses/LICENSE-2.0.txt")
             }
         }
-    }
-    repositories {
-        maven {
-            name = "local"
-            url = uri("${rootProject.layout.buildDirectory}/repo")
-        }
-        maven {
-            name = "sonatype"
-            url = uri(if (version.toString().endsWith("SNAPSHOT")) {
-                "https://s01.oss.sonatype.org/content/repositories/snapshots/"
-            } else {
-                "https://s01.oss.sonatype.org/service/local/staging/deploy/maven2/"
-            })
-            credentials {
-                username = System.getenv("OSSRH_USERNAME")
-                password = System.getenv("OSSRH_PASSWORD")
+        developers {
+            developer {
+                id.set("kochkaev")
+                name.set("Dmitrii Kochkaev")
             }
         }
+        scm {
+            connection.set("scm:git:git://github.com/kochkaev/kotlin-telegrambots.git")
+            developerConnection.set("scm:git:ssh://github.com/kochkaev/kotlin-telegrambots.git")
+            url.set("https://github.com/kochkaev/kotlin-telegrambots/tree/main")
+        }
     }
-}
-signing {
-    val signingKey = System.getenv("GPG_PRIVATE_KEY")
-    val signingPassword = System.getenv("GPG_PASSPHRASE")
-    useInMemoryPgpKeys(signingKey, signingPassword)
-    sign(publishing.publications["mavenJava"])
 }
 
 tasks.jar {
