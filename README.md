@@ -1,7 +1,7 @@
 # Kotlin Coroutine Extensions for TelegramBots
 
 [![Build Status](https://img.shields.io/github/actions/workflow/status/your-username/kotlin-telegrambots/build.yml?branch=main)](https://github.com/your-username/kotlin-telegrambots/actions)
-[![Maven Central](https://img.shields.io/maven-central/v/ru.kochkaev.kotlin/telegrambots.svg?label=Maven%20Central)](https://search.maven.org/search?q=g:ru.kochkaev.kotlin%20AND%20a:telegrambots)
+[![Maven Central](https://img.shields.io/maven-central/v/io.github.kochkaev/kotlin-telegrambots.svg?label=Maven%20Central)](https://search.maven.org/search?q=g:io.github.kochkaev%20AND%20a:kotlin-telegrambots)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
 A lightweight library that provides high-level, idiomatic Kotlin extensions for the popular Java [TelegramBots](https://github.com/rubenlagus/TelegramBots) library. It transforms the verbose, object-oriented API into clean, concise, and modern Kotlin code.
@@ -72,7 +72,7 @@ bot.execute(message)
 
 **After (with this library):**
 ```kotlin
-import ru.kochkaev.kotlin.telegrambots.sendMessage // Import the suspend extension
+import io.github.kochkaev.kotlin.telegrambots.sendMessage // Import the suspend extension
 
 // Clean, direct, non-blocking call
 val sentMessage = bot.sendMessage(chatId = "12345", text = "Hello from the coroutine side!")
@@ -89,7 +89,7 @@ params.allowSendingWithoutReply = true
 
 **After (with this library):**
 ```kotlin
-import ru.kochkaev.kotlin.telegrambots.replyParameters // Import the builder function
+import io.github.kochkaev.kotlin.telegrambots.replyParameters // Import the builder function
 
 // Create the object with a clean, declarative function
 val params = replyParameters(
