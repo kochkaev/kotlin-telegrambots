@@ -1,187 +1,162 @@
-import com.github.javaparser.StaticJavaParser
+import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration
+import com.github.javaparser.ast.body.FieldDeclaration
 import com.squareup.kotlinpoet.*
-import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
-import org.gradle.api.DefaultTask
-import org.gradle.api.file.DirectoryProperty
-import org.gradle.api.tasks.InputDirectory
-import org.gradle.api.tasks.OutputDirectory
-import org.gradle.api.tasks.TaskAction
-import org.reflections.Reflections
-import org.reflections.scanners.Scanners
-import org.reflections.util.ConfigurationBuilder
+import org.gradle.api.tasks.Internal
 import org.telegram.telegrambots.meta.api.interfaces.BotApiObject
-import java.lang.reflect.Field
 import java.lang.reflect.Method
-import java.lang.reflect.Modifier
+import java.util.*
 
-abstract class GenerateObjectBuildersTask : DefaultTask() {
+abstract class GenerateObjectBuildersTask : AbstractGeneratorTask() {
 
-    @get:InputDirectory
-    abstract val sourcesDir: DirectoryProperty
+    @Internal override val targetPackageName = "io.github.kochkaev.kotlin.telegrambots"
+    @Internal override val targetFileName = "ObjectBuilders"
+    @Internal override val reflectionBaseClass = BotApiObject::class.java
 
-    @get:OutputDirectory
-    abstract val outputDir: DirectoryProperty
-
-    private fun getAllMethods(clazz: Class<*>): List<Method> {
-        val methods = mutableListOf<Method>()
-        var currentClass: Class<*>? = clazz
-        while (currentClass != null && currentClass != Object::class.java) {
-            methods.addAll(currentClass.declaredMethods)
-            currentClass = currentClass.superclass
-        }
-        return methods
-    }
-
-    private fun getAllFields(clazz: Class<*>): Map<String, Field> {
-        val fields = mutableMapOf<String, Field>()
-        var currentClass: Class<*>? = clazz
-        while (currentClass != null && currentClass != Object::class.java) {
-            currentClass.declaredFields.forEach {
-                if (!fields.containsKey(it.name)) {
-                    fields[it.name] = it
+    override fun generateFunctionsForClass(
+        fileSpecBuilder: FileSpec.Builder,
+        clazz: Class<*>,
+        classDecl: ClassOrInterfaceDeclaration
+    ): Int {
+        val deprecatedFieldsWithMessages = classDecl.findAll(FieldDeclaration::class.java)
+            .filter { it.isAnnotationPresent("Deprecated") }
+            .flatMap { field ->
+                val javadocMessage = field.javadoc.flatMap { javadoc ->
+                    javadoc.blockTags.find { it.tagName == "deprecated" }?.content?.toText().optional()
+                }.orElse("Field is deprecated.")
+                field.variables.map { variable ->
+                    variable.nameAsString to javadocMessage
                 }
-            }
-            currentClass = currentClass.superclass
+            }.toMap()
+        val deprecatedFields = deprecatedFieldsWithMessages.keys
+
+        val fieldsWithNonNull = classDecl.findAll(FieldDeclaration::class.java)
+            .filter { field -> field.annotations.any { it.name.identifier == "NonNull" } }
+            .map { it.variables.first().nameAsString }
+            .toSet()
+
+        val functionName = clazz.simpleName.replaceFirstChar { it.lowercase() }
+
+        val setters = getAllMethods(clazz)
+            .filter { it.name.startsWith("set") && it.parameterCount == 1 && java.lang.reflect.Modifier.isPublic(it.modifiers) }
+            .associateBy { it.name.substring(3).replaceFirstChar { c -> c.lowercase() } }
+
+        if (setters.isEmpty()) return 0
+
+        val (requiredSetters, optionalSetters) = setters.entries.partition { (propertyName, _) ->
+            propertyName in fieldsWithNonNull
         }
-        return fields
-    }
 
-    private val javaToKotlinMap = mapOf(
-        ClassName("java.lang", "Object") to ANY,
-        ClassName("java.lang", "String") to STRING,
-        ClassName("java.lang", "Integer") to INT,
-        ClassName("java.lang", "Long") to LONG,
-        ClassName("java.lang", "Short") to SHORT,
-        ClassName("java.lang", "Byte") to BYTE,
-        ClassName("java.lang", "Float") to FLOAT,
-        ClassName("java.lang", "Double") to DOUBLE,
-        ClassName("java.lang", "Character") to CHAR,
-        ClassName("java.lang", "Boolean") to BOOLEAN,
-        ClassName("java.util", "List") to LIST,
-        ClassName("java.util", "Map") to MAP,
-        ClassName("java.util", "Set") to SET,
-        ClassName("java.util", "Collection") to COLLECTION
-    )
-
-    private fun TypeName.toKotlinType(): TypeName {
-        return when (this) {
-            is ParameterizedTypeName -> {
-                val rawType = this.rawType.toKotlinType() as ClassName
-                val typeArguments = this.typeArguments.map { it.toKotlinType() }.toTypedArray()
-                rawType.parameterizedBy(*typeArguments).copy(nullable = this.isNullable)
-            }
-            is ClassName -> javaToKotlinMap[this]?.copy(nullable = this.isNullable) ?: this
-            else -> this
+        val requiredParams = requiredSetters.sortedBy { it.key }.map { (propertyName, setter) ->
+            ParameterSpec.builder(propertyName, setter.genericParameterTypes.first().asTypeName().toKotlinType()).build()
         }
-    }
 
-    @TaskAction
-    fun execute() {
-        logger.warn("--- Starting Object Builder Function Generation (Setter-based Strategy) ---")
+        val (deprecatedOptionalSetters, nonDeprecatedOptionalSetters) = optionalSetters.partition { (propertyName, _) ->
+            propertyName in deprecatedFields
+        }
 
-        val fileSpecBuilder = FileSpec.builder("io.github.kochkaev.kotlin.telegrambots", "ObjectBuilders")
-            .addAnnotation(AnnotationSpec.builder(Suppress::class)
-                .useSiteTarget(AnnotationSpec.UseSiteTarget.FILE)
-                .addMember("%S, %S", "unused", "RedundantVisibilityModifier")
-                .build())
+        val nonDeprecatedOptionalParams = nonDeprecatedOptionalSetters.sortedBy { it.key }.map { (propertyName, setter) ->
+            ParameterSpec.builder(propertyName, setter.genericParameterTypes.first().asTypeName().toKotlinType().copy(nullable = true))
+                .defaultValue("null")
+                .build()
+        }
 
-        val classLoader = BotApiObject::class.java.classLoader
-        val reflections = Reflections(ConfigurationBuilder()
-            .forPackage("org.telegram.telegrambots.meta.api.objects", classLoader)
-            .setScanners(Scanners.SubTypes)
-            .addClassLoaders(classLoader)
+        val isClassDeprecated = classDecl.isAnnotationPresent("Deprecated")
+        val classDeprecationMessage = if (isClassDeprecated) {
+            classDecl.javadoc.flatMap { javadoc ->
+                Optional.ofNullable(javadoc.blockTags.find { it.tagName == "deprecated" }?.content?.toText())
+            }.orElse("Class ${clazz.simpleName} is deprecated.")
+        } else {
+            null
+        }
+
+        val deprecatedRequiredProperties = requiredSetters.map { it.key }.filter { it in deprecatedFields }
+        val isFunctionDeprecated = deprecatedRequiredProperties.isNotEmpty()
+        val deprecationMessage = if (isFunctionDeprecated) {
+            val messages = deprecatedRequiredProperties.joinToString(separator = "\n") { prop ->
+                "- '$prop': ${deprecatedFieldsWithMessages[prop]}"
+            }
+            "This function uses deprecated required parameters:\n$messages"
+        } else null
+
+        generateFunction(
+            fileSpecBuilder,
+            clazz,
+            functionName,
+            requiredParams,
+            nonDeprecatedOptionalParams,
+            setters,
+            isClassDeprecated || isFunctionDeprecated,
+            classDeprecationMessage ?: deprecationMessage
         )
-        val allObjectClasses = reflections.getSubTypesOf(BotApiObject::class.java)
+        var functionsGenerated = 1
 
-        val sourceFilesMap = sourcesDir.get().asFile.walk()
-            .filter { it.isFile && it.extension == "java" }
-            .associateBy { it.nameWithoutExtension }
-
-        var functionsGenerated = 0
-
-        allObjectClasses.forEach { clazz ->
-            if (clazz.isEnum || clazz.isInterface || clazz.isAnonymousClass || Modifier.isAbstract(clazz.modifiers) || !Modifier.isPublic(clazz.modifiers)) return@forEach
-            try { clazz.getConstructor() } catch (_: NoSuchMethodException) { return@forEach }
-
-            val sourceFile = sourceFilesMap[clazz.simpleName] ?: return@forEach
-            val cu = StaticJavaParser.parse(sourceFile)
-            val classDecl = cu.findFirst(com.github.javaparser.ast.body.ClassOrInterfaceDeclaration::class.java) { it.nameAsString == clazz.simpleName }.orElse(null) ?: return@forEach
-            
-            val fieldsWithNonNull = classDecl.findAll(com.github.javaparser.ast.body.FieldDeclaration::class.java)
-                .filter { field -> field.annotations.any { it.name.identifier == "NonNull" } }
-                .map { it.variables.first().nameAsString }
-                .toSet()
-
-            val functionName = clazz.simpleName.replaceFirstChar { it.lowercase() }
-            
-            val fieldsByName = getAllFields(clazz)
-            val setters = getAllMethods(clazz)
-                .filter { it.name.startsWith("set") && it.parameterCount == 1 && Modifier.isPublic(it.modifiers) }
-                .associateBy { it.name.substring(3).replaceFirstChar { c -> c.lowercase() } }
-
-            if (setters.isEmpty()) return@forEach
-
-            val (requiredSetters, optionalSetters) = setters.entries.partition { (propertyName, _) ->
-                propertyName in fieldsWithNonNull
-            }
-
-            val requiredParams = requiredSetters.sortedBy { it.key }.map { (propertyName, setter) ->
-                ParameterSpec.builder(propertyName, setter.genericParameterTypes.first().asTypeName().toKotlinType()).build()
-            }
-            val optionalParams = optionalSetters.sortedBy { it.key }.map { (propertyName, setter) ->
+        if (deprecatedOptionalSetters.isNotEmpty()) {
+            val deprecatedOptionalParams = (deprecatedOptionalSetters.sortedBy { it.key }.map { (propertyName, setter) ->
                 ParameterSpec.builder(propertyName, setter.genericParameterTypes.first().asTypeName().toKotlinType().copy(nullable = true))
                     .defaultValue("null")
                     .build()
+            })
+
+            val deprecatedOptionalProperties = deprecatedOptionalSetters.map { it.key }
+            val allDeprecatedProperties = (deprecatedRequiredProperties + deprecatedOptionalProperties).distinct()
+            val fullDeprecationMessage = allDeprecatedProperties.joinToString(separator = "\n") { prop ->
+                "- '$prop': ${deprecatedFieldsWithMessages[prop]}"
             }
 
-            val funSpecBuilder = FunSpec.builder(functionName)
-                .returns(clazz.asTypeName().toKotlinType())
-                .addParameters(requiredParams + optionalParams)
-                .addStatement("val obj = %T()", clazz.asTypeName())
-
-            val classDeprecation = clazz.getAnnotation(Deprecated::class.java)
-            if (classDeprecation != null) {
-                funSpecBuilder.addAnnotation(AnnotationSpec.builder(Deprecated::class)
-                    .addMember("message = %S", classDeprecation.message)
-                    .build())
-            }
-
-            (requiredParams + optionalParams).forEach { param ->
-                val setter = setters[param.name]!!
-                val field = fieldsByName[param.name]
-                val usePropertyAccess = field != null && setter.parameterTypes[0] == field.type
-
-                if (param.type.isNullable) {
-                    val block = CodeBlock.builder().beginControlFlow("if (${param.name} != null)")
-                    if (usePropertyAccess) {
-                        block.addStatement("obj.${param.name} = ${param.name}")
-                    } else {
-                        block.addStatement("obj.${setter.name}(${param.name})")
-                    }
-                    block.endControlFlow()
-                    funSpecBuilder.addCode(block.build())
-                } else {
-                    if (usePropertyAccess) {
-                        funSpecBuilder.addStatement("obj.${param.name} = ${param.name}")
-                    } else {
-                        funSpecBuilder.addStatement("obj.${setter.name}(${param.name})")
-                    }
-                }
-            }
-            
-            funSpecBuilder.addStatement("return obj")
-            fileSpecBuilder.addFunction(funSpecBuilder.build())
+            generateFunction(
+                fileSpecBuilder,
+                clazz,
+                functionName,
+                requiredParams,
+                nonDeprecatedOptionalParams + deprecatedOptionalParams,
+                setters,
+                true,
+                classDeprecationMessage ?: "This function includes deprecated parameters:\n$fullDeprecationMessage"
+            )
             functionsGenerated++
         }
+        return functionsGenerated
+    }
 
-        logger.warn("--- Object Builder Generation Summary ---")
-        logger.warn("Total functions generated: $functionsGenerated")
+    private fun generateFunction(
+        fileSpecBuilder: FileSpec.Builder,
+        clazz: Class<*>,
+        functionName: String,
+        requiredParams: List<ParameterSpec>,
+        optionalParams: List<ParameterSpec>,
+        setters: Map<String, Method>,
+        deprecated: Boolean,
+        deprecationMessage: String?
+    ) {
+        val funSpecBuilder = FunSpec.builder(functionName)
+            .returns(clazz.asTypeName().toKotlinType())
+            .addKdoc("Builder function for [%T].\n\n@see %T", clazz, clazz)
+            .addParameters(requiredParams)
+            .addParameters(optionalParams)
+            .addStatement("val obj = %T()", clazz.asTypeName())
 
-        if (functionsGenerated > 0) {
-            fileSpecBuilder.build().writeTo(outputDir.get().asFile)
-            logger.warn("--- Object Builder Generation Finished Successfully ---")
-        } else {
-            logger.warn("--- No object builders were generated. ---")
+        if (deprecated) {
+            funSpecBuilder.addAnnotation(AnnotationSpec.builder(Deprecated::class)
+                .addMember("message = %S", deprecationMessage ?: "This function is deprecated.")
+                .build())
         }
+
+        (requiredParams + optionalParams).forEach { param ->
+            val setter = setters[param.name]!!
+            if (param.type.isNullable) {
+                funSpecBuilder.addCode(
+                    CodeBlock.builder()
+                        .beginControlFlow("if (${param.name} != null)")
+                        .addStatement("obj.${setter.name}(${param.name})")
+                        .endControlFlow()
+                        .build()
+                )
+            } else {
+                funSpecBuilder.addStatement("obj.${setter.name}(${param.name})")
+            }
+        }
+
+        funSpecBuilder.addStatement("return obj")
+        fileSpecBuilder.addFunction(funSpecBuilder.build())
     }
 }
