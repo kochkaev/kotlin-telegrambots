@@ -32,7 +32,7 @@ Add the library to your project's dependencies.
 ```kotlin
 // build.gradle.kts
 dependencies {
-    implementation("io.github.kochkaev:kotlin-telegrambots:1.0.2-6.9.7.1")
+    implementation("io.github.kochkaev:kotlin-telegrambots:1.0.0")
 }
 ```
 
@@ -41,7 +41,7 @@ dependencies {
 ```groovy
 // build.gradle
 dependencies {
-    implementation 'io.github.kochkaev:kotlin-telegrambots:1.0.2-6.9.7.1'
+    implementation 'io.github.kochkaev:kotlin-telegrambots:1.0.0'
 }
 ```
 
@@ -52,7 +52,7 @@ dependencies {
 <dependency>
     <groupId>io.github.kochkaev</groupId>
     <artifactId>kotlin-telegrambots</artifactId>
-    <version>1.0.2-6.9.7.1</version>
+    <version>1.0.0</version>
 </dependency>
 ```
 
@@ -125,10 +125,19 @@ To publish the artifacts to your local Maven repository (`~/.m2/repository`), ru
 ./gradlew publishToMavenLocal
 ```
 
+## CI/CD Workflows
+
+This project uses GitHub Actions for its CI/CD pipeline. Here is a brief overview of the workflows:
+
+- **`pr-validation.yml`**: Runs on every pull request to ensure that the code builds and passes all checks.
+- **`check-for-updates.yml`**: Runs on a schedule to check for new versions of the `TelegramBots` library and automatically creates a pull request if an update is found.
+- **`release.yml`**: Runs on every push to the `main` branch. It builds the project, creates a Git tag, and generates a GitHub release with detailed release notes.
+- **`publish.yml`**: Runs automatically after the `release.yml` workflow completes successfully. It publishes the new version of the library to Maven Central.
+
 ## Contributing
 
 Contributions are welcome! If you find a bug or have a feature request, please open an issue. If you want to contribute code, please open a pull request.
 
 ## License
 
-This project is licensed under the Apache 2.0 License. See the [LICENSE](LICENSE.txt) file for details.
+This project is licensed under the Apache 2.0 License. See the [LICENSE](LICENSE) file for details.

@@ -11,6 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      pull-requests: read
       
     steps:
       - name: Checkout repository
@@ -62,13 +63,22 @@ jobs:
       - name: Build with Gradle
         run: ./gradlew build
 
+      - name: Generate Release Notes
+        id: generate_release_notes
+        uses: release-drafter/release-drafter@v5
+        with:
+          config-name: release-drafter.yml
+          tag: ${{ steps.get_versions.outputs.TAG_NAME }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Create or Update Release and Upload Artifacts
         uses: softprops/action-gh-release@v1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           tag_name: ${{ steps.get_versions.outputs.TAG_NAME }}
           name: Release ${{ steps.get_versions.outputs.TAG_NAME }}
-          body: "Automated release."
+          body: ${{ steps.generate_release_notes.outputs.body }}
           make_latest: true
           files: |
             build/libs/*.jar

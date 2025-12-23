@@ -1,8 +1,11 @@
+import org.gradle.api.publish.tasks.GenerateModuleMetadata
 import org.gradle.jvm.toolchain.JavaLanguageVersion
 
 val projectVersion: String by project
 val telegrambotsVersion: String by project
 val kotlinxCoroutinesVersion: String by project
+val ktorVersion: String by project
+val jacksonVersion: String by project
 
 val telegramSources: Configuration by configurations.creating
 
@@ -25,6 +28,10 @@ repositories {
 dependencies {
     api("org.telegram:telegrambots:$telegrambotsVersion")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-jdk8:$kotlinxCoroutinesVersion")
+    implementation("io.ktor:ktor-client-cio:${ktorVersion}")
+    implementation("io.ktor:ktor-client-content-negotiation:${ktorVersion}")
+    implementation("io.ktor:ktor-serialization-jackson:${ktorVersion}")
+    implementation("com.fasterxml.jackson.core:jackson-databind:${jacksonVersion}")
 }
 
 val generatedSrcDir = "src/main/generated/kotlin"
@@ -33,7 +40,8 @@ val unzippedSourcesDir = layout.buildDirectory.dir("unzipped-sources")
 sourceSets {
     main {
         kotlin {
-            srcDir(generatedSrcDir)
+            srcDir("src/main/kotlin") // Include manual sources
+            srcDir(generatedSrcDir)   // Include generated sources
         }
     }
 }
@@ -61,26 +69,49 @@ val generateObjectBuilders = tasks.register<GenerateObjectBuildersTask>("generat
     dependsOn(unzipTelegramSources)
 }
 
+val generateHandlersDsl = tasks.register<GenerateHandlersDslTask>("generateHandlersDsl") {
+    group = "build"
+    description = "Generates type-safe DSL handlers for Update types."
+    sourcesDir.set(unzipTelegramSources.get().destinationDir)
+    outputDir.set(file(generatedSrcDir))
+    dependsOn(unzipTelegramSources)
+}
+
+val generateAll = tasks.register("generateAll") {
+    group = "build"
+    description = "Runs all code generation tasks."
+    dependsOn(generateTelegramBotExtensions, generateObjectBuilders, generateHandlersDsl)
+}
+
 tasks.named("compileKotlin") {
-    dependsOn(generateTelegramBotExtensions, generateObjectBuilders)
+    dependsOn(generateAll)
 }
 
 group = "io.github.kochkaev"
 version = "$projectVersion-$telegrambotsVersion"
 
+
+
 java {
     toolchain {
         languageVersion.set(JavaLanguageVersion.of(17))
     }
-    withJavadocJar()
-    withSourcesJar()
 }
 
-// --- AND configure the task it creates ---
-tasks.named<Jar>("sourcesJar") {
-    dependsOn(generateTelegramBotExtensions, generateObjectBuilders)
+tasks.named("kotlinSourcesJar") {
+    dependsOn(generateAll)
 }
 
+tasks.named("javadoc") {
+    dependsOn(generateAll)
+}
+
+afterEvaluate {
+    tasks.withType<GenerateModuleMetadata> {
+        dependsOn(tasks.named("kotlinSourcesJar"))
+        dependsOn(tasks.named("plainJavadocJar"))
+    }
+}
 
 kotlin {
     jvmToolchain(17)
@@ -88,7 +119,9 @@ kotlin {
 
 mavenPublishing {
     publishToMavenCentral(com.vanniktech.maven.publish.SonatypeHost.S01)
-    signAllPublications()
+    if (project.hasProperty("signing.key")) {
+        signAllPublications()
+    }
 
     pom {
         name.set("Kotlin Telegram Bots Extensions")
