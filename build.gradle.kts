@@ -1,3 +1,4 @@
+import org.gradle.api.publish.tasks.GenerateModuleMetadata
 import org.gradle.jvm.toolchain.JavaLanguageVersion
 
 val projectVersion: String by project
@@ -89,18 +90,28 @@ tasks.named("compileKotlin") {
 group = "io.github.kochkaev"
 version = "$projectVersion-$telegrambotsVersion"
 
+
+
 java {
     toolchain {
         languageVersion.set(JavaLanguageVersion.of(17))
     }
-    withJavadocJar()
-    withSourcesJar()
 }
 
-tasks.named<Jar>("sourcesJar") {
+tasks.named("kotlinSourcesJar") {
     dependsOn(generateAll)
 }
 
+tasks.named("javadoc") {
+    dependsOn(generateAll)
+}
+
+afterEvaluate {
+    tasks.withType<GenerateModuleMetadata> {
+        dependsOn(tasks.named("kotlinSourcesJar"))
+        dependsOn(tasks.named("plainJavadocJar"))
+    }
+}
 
 kotlin {
     jvmToolchain(17)
@@ -108,7 +119,9 @@ kotlin {
 
 mavenPublishing {
     publishToMavenCentral(com.vanniktech.maven.publish.SonatypeHost.S01)
-    signAllPublications()
+    if (project.hasProperty("signing.key")) {
+        signAllPublications()
+    }
 
     pom {
         name.set("Kotlin Telegram Bots Extensions")
