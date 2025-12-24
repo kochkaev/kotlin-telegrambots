@@ -21,7 +21,7 @@ dependencies {
 
 plugins {
     id("org.jetbrains.kotlin.jvm") version "1.9.22"
-    id("com.vanniktech.maven.publish") version "0.28.0"
+    id("com.vanniktech.maven.publish") version "0.35.0"
     `java-library`
 }
 
@@ -117,13 +117,18 @@ java {
     toolchain {
         languageVersion.set(JavaLanguageVersion.of(17))
     }
+    withSourcesJar()
 }
 
-tasks.named("kotlinSourcesJar") {
+tasks.kotlinSourcesJar {
     dependsOn(generateAll)
 }
 
 tasks.named("javadoc") {
+    dependsOn(generateAll)
+}
+
+tasks.named("sourcesJar") {
     dependsOn(generateAll)
 }
 
@@ -140,9 +145,10 @@ kotlin {
 
 mavenPublishing {
     publishToMavenCentral(automaticRelease = true)
-    if (project.hasProperty("signingInMemoryKey")) {
-        signAllPublications()
-    }
+    signAllPublications()
+//    if (project.hasProperty("signingInMemoryKey") || project.hasProperty("signing.key")) {
+//        signAllPublications()
+//    }
 
     pom {
         name.set("Kotlin Telegram Bots Extensions")
