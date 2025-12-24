@@ -13,7 +13,7 @@ import org.telegram.telegrambots.meta.api.objects.Update
 /**
  * A [TelegramWebhookBot] implementation that exposes a [kotlinx.coroutines.flow.Flow] of updates.
  */
-class KTelegramWebhookBot(
+open class KTelegramWebhookBot(
     token: String,
     private var botUsername: String? = null,
     private val botPath: String? = botUsername,
