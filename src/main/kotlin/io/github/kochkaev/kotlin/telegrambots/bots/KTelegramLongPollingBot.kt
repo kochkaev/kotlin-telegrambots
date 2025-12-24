@@ -14,7 +14,7 @@ import org.telegram.telegrambots.meta.api.objects.Update
 /**
  * A [TelegramLongPollingBot] implementation that exposes a [Flow] of updates.
  */
-class KTelegramLongPollingBot(
+open class KTelegramLongPollingBot(
     token: String,
     private var botUsername: String? = null,
     options: DefaultBotOptions

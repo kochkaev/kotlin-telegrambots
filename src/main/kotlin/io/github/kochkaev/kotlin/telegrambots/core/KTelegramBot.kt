@@ -27,7 +27,7 @@ import org.telegram.telegrambots.updatesreceivers.DefaultWebhook
  * @param botPath The bot's path for webhooks.
  * @param options Custom bot options.
  */
-class KTelegramBot(
+open class KTelegramBot(
     private val botToken: String,
     botUsername: String? = null,
     var botPath: String? = botUsername,
