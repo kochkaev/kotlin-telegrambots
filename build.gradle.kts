@@ -7,10 +7,14 @@ val kotlinxCoroutinesVersion: String by project
 val ktorVersion: String by project
 val jacksonVersion: String by project
 
-val telegramSources: Configuration by configurations.creating
+val telegramMetaSources: Configuration by configurations.creating
+val telegrambotsSources: Configuration by configurations.creating
 
 dependencies {
-    telegramSources("org.telegram:telegrambots-meta:$telegrambotsVersion:sources") {
+    telegramMetaSources("org.telegram:telegrambots-meta:$telegrambotsVersion:sources") {
+        isTransitive = false
+    }
+    telegrambotsSources("org.telegram:telegrambots:$telegrambotsVersion:sources") {
         isTransitive = false
     }
 }
@@ -35,7 +39,8 @@ dependencies {
 }
 
 val generatedSrcDir = "src/main/generated/kotlin"
-val unzippedSourcesDir = layout.buildDirectory.dir("unzipped-sources")
+val unzippedMetaSourcesDir = layout.buildDirectory.dir("unzipped-meta-sources")
+val unzippedBotSourcesDir = layout.buildDirectory.dir("unzipped-bot-sources")
 
 sourceSets {
     main {
@@ -46,41 +51,57 @@ sourceSets {
     }
 }
 
-val unzipTelegramSources = tasks.register<Sync>("unzipTelegramSources") {
+val unzipTelegramMetaSources = tasks.register<Sync>("unzipTelegramMetaSources") {
     group = "build"
     description = "Unzips the TelegramBots-Meta sources.jar for code generation."
-    from(zipTree(telegramSources.singleFile))
-    into(unzippedSourcesDir)
+    from(zipTree(telegramMetaSources.singleFile))
+    into(unzippedMetaSourcesDir)
+}
+
+val unzipTelegrambotsSources = tasks.register<Sync>("unzipTelegrambotsSources") {
+    group = "build"
+    description = "Unzips the TelegramBots sources.jar for code generation."
+    from(zipTree(telegrambotsSources.singleFile))
+    into(unzippedBotSourcesDir)
 }
 
 val generateTelegramBotExtensions = tasks.register<GenerateExtensionsTask>("generateTelegramBotExtensions") {
     group = "build"
     description = "Generates high-level, idiomatic Kotlin extensions for API methods."
-    sourcesDir.set(unzipTelegramSources.get().destinationDir)
+    sourcesDir.set(unzippedMetaSourcesDir)
     outputDir.set(file(generatedSrcDir))
-    dependsOn(unzipTelegramSources)
+    dependsOn(unzipTelegramMetaSources)
 }
 
 val generateObjectBuilders = tasks.register<GenerateObjectBuildersTask>("generateObjectBuilders") {
     group = "build"
     description = "Generates builder functions for API objects."
-    sourcesDir.set(unzipTelegramSources.get().destinationDir)
+    sourcesDir.set(unzippedMetaSourcesDir)
     outputDir.set(file(generatedSrcDir))
-    dependsOn(unzipTelegramSources)
+    dependsOn(unzipTelegramMetaSources)
 }
 
 val generateHandlersDsl = tasks.register<GenerateHandlersDslTask>("generateHandlersDsl") {
     group = "build"
     description = "Generates type-safe DSL handlers for Update types."
-    sourcesDir.set(unzipTelegramSources.get().destinationDir)
+    sourcesDir.set(unzippedMetaSourcesDir)
     outputDir.set(file(generatedSrcDir))
-    dependsOn(unzipTelegramSources)
+    dependsOn(unzipTelegramMetaSources)
+}
+
+val generateKTelegramBot = tasks.register<GenerateKTelegramBotTask>("generateKTelegramBot") {
+    group = "build"
+    description = "Generates a suspendable KTelegramBot wrapper."
+    botSourcesDir.set(unzippedBotSourcesDir)
+    metaSourcesDir.set(unzippedMetaSourcesDir)
+    outputDir.set(file(generatedSrcDir))
+    dependsOn(unzipTelegrambotsSources, unzipTelegramMetaSources)
 }
 
 val generateAll = tasks.register("generateAll") {
     group = "build"
     description = "Runs all code generation tasks."
-    dependsOn(generateTelegramBotExtensions, generateObjectBuilders, generateHandlersDsl)
+    dependsOn(generateTelegramBotExtensions, generateObjectBuilders, generateHandlersDsl, generateKTelegramBot)
 }
 
 tasks.named("compileKotlin") {
