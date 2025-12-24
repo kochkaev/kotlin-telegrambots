@@ -28,7 +28,7 @@ import org.telegram.telegrambots.updatesreceivers.DefaultWebhook
  * @param options Custom bot options.
  */
 class KTelegramBot(
-    val botToken: String,
+    private val botToken: String,
     botUsername: String? = null,
     var botPath: String? = botUsername,
     options: DefaultBotOptions = DefaultBotOptions(),
