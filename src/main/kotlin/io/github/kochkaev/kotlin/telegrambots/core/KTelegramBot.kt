@@ -34,6 +34,8 @@ class KTelegramBot(
     options: DefaultBotOptions = DefaultBotOptions(),
 ) : DefaultKAbsSender(options, botToken), FlowTelegramBot, TelegramBot {
 
+    override fun getBotToken(): String = botToken
+
     // Store the username provided in the constructor, or the one we fetch.
     private var resolvedBotUsername: String? = botUsername
     override fun getBotUsername(): String? = resolvedBotUsername
