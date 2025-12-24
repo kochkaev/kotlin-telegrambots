@@ -4,24 +4,22 @@
 [![Maven Central](https://img.shields.io/maven-central/v/io.github.kochkaev/kotlin-telegrambots.svg?label=Maven%20Central)](https://search.maven.org/search?q=g:io.github.kochkaev%20AND%20a:kotlin-telegrambots)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
-A lightweight library that provides high-level, idiomatic Kotlin extensions for the popular Java [TelegramBots](https://github.com/rubenlagus/TelegramBots) library. It transforms the verbose, object-oriented API into clean, concise, and modern Kotlin code.
+A lightweight library that provides a powerful, idiomatic Kotlin layer on top of the popular Java [TelegramBots](https://github.com/rubenlagus/TelegramBots) library. It transforms the original API into a clean, concise, and modern coroutine-based experience.
 
 ## Overview
 
-The official `TelegramBots` library is an excellent tool, but its Java-centric design can feel cumbersome in Kotlin. This project solves two major pain points:
+The official `TelegramBots` library is an excellent tool, but its Java-centric design can feel cumbersome in Kotlin. This project reimagines the developer experience, focusing on simplicity, type-safety, and the power of coroutines.
 
-1.  **Verbose API Calls**: Instead of manually creating method objects (`new SendMessage(...)`), you can call API methods directly: `bot.sendMessage(...)`.
-2.  **Complex Object Creation**: Instead of instantiating and configuring objects (`new ReplyParameters().apply { ... }`), you can use clean builder functions: `replyParameters(...)`.
-
-All asynchronous operations are wrapped in `suspend` functions for seamless integration with Kotlin Coroutines.
+It provides a universal `KTelegramBot` class that can be run in either **Long Polling** or **Webhook** mode, and can be switched "on the fly". All asynchronous operations are exposed as `suspend` functions, and a `Flow<Update>` is provided for reactive update processing.
 
 ## Features
 
-- **High-Level API**: Provides direct, expressive methods like `bot.sendMessage(...)`.
-- **Convenient Object Builders**: Offers builder functions like `replyParameters(...)` for creating complex objects.
-- **Idiomatic Kotlin**: Replaces `CompletableFuture` with `suspend` functions and utilizes default arguments for optional parameters.
-- **Auto-Generated**: Two code generation tasks scan the `TelegramBots` library to ensure full API coverage for both methods and objects.
-- **Lightweight & Safe**: Adds no runtime overhead and respects the original library's contracts for required and optional fields.
+- **Universal Bot Class**: A single `KTelegramBot` class to rule them all. No need to choose between `TelegramLongPollingBot` or `TelegramWebhookBot` at compile time.
+- **Coroutines First**: All `executeAsync` methods from `AbsSender` are converted into clean `suspend` functions (e.g., `executeK(...)`).
+- **Reactive Updates with Flow**: Get a `Flow<Update>` from your bot and use the full power of `kotlinx.coroutines.flow` to handle updates.
+- **Type-Safe DSL for Handlers**: A clean, auto-generated DSL to handle different update types (`onMessage`, `onCallbackQuery`, etc.) in a type-safe manner.
+- **High-Level API & Object Builders**: Still provides the convenient extension functions (`bot.sendMessage(...)`) and builders (`replyParameters(...)`) for a truly idiomatic experience.
+- **Auto-Generated & Up-to-Date**: Code generation tasks scan the `TelegramBots` library to ensure the API is always current.
 
 ## Installation
 
@@ -32,84 +30,54 @@ Add the library to your project's dependencies.
 ```kotlin
 // build.gradle.kts
 dependencies {
-    implementation("io.github.kochkaev:kotlin-telegrambots:1.0.0")
+    implementation("io.github.kochkaev:kotlin-telegrambots:1.0.4-6.9.7.1") // Use the latest version
 }
 ```
 
-#### Gradle (Groovy DSL)
+## Quick Start
 
-```groovy
-// build.gradle
-dependencies {
-    implementation 'io.github.kochkaev:kotlin-telegrambots:1.0.0'
+Creating and running a bot is incredibly simple.
+
+```kotlin
+fun main() = runBlocking {
+    // 1. Create the bot using the DSL
+    val bot = telegramBot(
+        token = "YOUR_BOT_TOKEN",
+        // Username is optional, it will be fetched automatically on start
+        scope = this 
+    ) {
+        // 2. Define your handlers here
+        onCommand("start") {
+            // 'this' is an AbsSender, so you can call extension functions directly
+            val message = sendMessage(it.message.chatId.toString(), "Hello!")
+            println("Sent message with ID: ${message.messageId}")
+        }
+
+        onMessage {
+            // You get the Message object directly and safely
+            println("New message: ${it.text}")
+        }
+    }
+
+    // 3. Start the bot in your preferred mode
+    bot.startLongPolling()
+
+    println("Bot started!")
 }
-```
-
-#### Maven
-
-```xml
-<!-- pom.xml -->
-<dependency>
-    <groupId>io.github.kochkaev</groupId>
-    <artifactId>kotlin-telegrambots</artifactId>
-    <version>1.0.0</version>
-</dependency>
-```
-
-## Usage
-
-This library makes your bot code significantly cleaner and more readable.
-
-### 1. Calling API Methods
-
-**Before:**
-```kotlin
-val message = SendMessage()
-message.chatId = "12345"
-message.text = "Hello from the other side!"
-bot.execute(message)
-```
-
-**After (with this library):**
-```kotlin
-import io.github.kochkaev.kotlin.telegrambots.sendMessage // Import the suspend extension
-
-// Clean, direct, non-blocking call
-val sentMessage = bot.sendMessage(chatId = "12345", text = "Hello from the coroutine side!")
-```
-
-### 2. Creating API Objects
-
-**Before:**
-```kotlin
-val params = ReplyParameters()
-params.messageId = update.message.messageId
-params.allowSendingWithoutReply = true
-```
-
-**After (with this library):**
-```kotlin
-import io.github.kochkaev.kotlin.telegrambots.replyParameters // Import the builder function
-
-// Create the object with a clean, declarative function
-val params = replyParameters(
-    messageId = update.message.messageId,
-    allowSendingWithoutReply = true
-)
 ```
 
 ## How It Works
 
-The magic happens at build time. Two separate Gradle tasks analyze the `telegrambots-meta` library:
+The library uses a combination of smart architecture and build-time code generation:
 
-1.  **Method Generator**: Scans for `BotApiMethod` subclasses and generates `suspend` extension functions for `AbsSender`.
-2.  **Object Generator**: Scans for `BotApiObject` subclasses and generates global builder functions.
+1.  **`KTelegramBot`**: The core class that inherits from a generated `DefaultKAbsSender`. It manages the bot's lifecycle and provides the `Flow<Update>`.
+2.  **Receivers**: Internal `KLongPollingReceiver` and `KWebhookReceiver` classes implement the `LongPollingBot` and `WebhookBot` interfaces. Their only job is to receive updates and forward them to the `KTelegramBot`'s `Flow`. This is a clean implementation of the **Composition over Inheritance** principle.
+3.  **Code Generation**:
+    - **`GenerateKTelegramBotTask`**: Scans `DefaultAbsSender` and generates a base class with `suspend` versions of all `...Async` methods.
+    - **`GenerateHandlersDslTask`**: Scans the `Update` class and generates type-safe `on...` extension functions for the `HandlersDsl`.
+    - **`GenerateExtensionsTask` & `GenerateObjectBuildersTask`**: Generate high-level API methods and object builders.
 
-Both tasks use a hybrid approach:
-- **Reflection** (`org.reflections`) is used to reliably find all relevant classes.
-- **Source Code Parsing** (`JavaParser`) is used to read the original `.java` files to determine which fields are mandatory (annotated with `@NonNull`) and which are optional.
-
-This ensures the generated functions have correct, idiomatic Kotlin signatures with non-nullable types for required parameters and nullable types with default `null` values for optional ones.
+This ensures the library is always up-to-date with the latest `TelegramBots` API while providing a truly modern Kotlin experience.
 
 ## Building From Source
 
@@ -125,19 +93,6 @@ To publish the artifacts to your local Maven repository (`~/.m2/repository`), ru
 ./gradlew publishToMavenLocal
 ```
 
-## CI/CD Workflows
-
-This project uses GitHub Actions for its CI/CD pipeline. Here is a brief overview of the workflows:
-
-- **`pr-validation.yml`**: Runs on every pull request to ensure that the code builds and passes all checks.
-- **`check-for-updates.yml`**: Runs on a schedule to check for new versions of the `TelegramBots` library and automatically creates a pull request if an update is found.
-- **`release.yml`**: Runs on every push to the `main` branch. It builds the project, creates a Git tag, and generates a GitHub release with detailed release notes.
-- **`publish.yml`**: Runs automatically after the `release.yml` workflow completes successfully. It publishes the new version of the library to Maven Central.
-
-## Contributing
-
-Contributions are welcome! If you find a bug or have a feature request, please open an issue. If you want to contribute code, please open a pull request.
-
 ## License
 
-This project is licensed under the Apache 2.0 License. See the [LICENSE](LICENSE) file for details.
+This project is licensed under the Apache 2.0 License. See the [LICENSE](LICENSE.txt) file for details.

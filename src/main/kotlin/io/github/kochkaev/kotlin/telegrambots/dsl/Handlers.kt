@@ -1,20 +1,21 @@
 package io.github.kochkaev.kotlin.telegrambots.dsl
 
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
 import org.telegram.telegrambots.meta.api.objects.Update
 import org.telegram.telegrambots.meta.bots.AbsSender
+import org.telegram.telegrambots.meta.generics.TelegramBot
 
 /**
- * A DSL for configuring update handlers on top of a [Flow].
+ * A DSL for configuring update handlers on top of a [kotlinx.coroutines.flow.Flow].
  * This class is intended to be extended by generated functions.
  */
 class HandlersDsl(
     internal val bot: AbsSender,
     internal val scope: CoroutineScope,
-    internal val updates: SharedFlow<Update>
+    internal val updates: Flow<Update>
 )
 
 /**
@@ -32,7 +33,13 @@ fun HandlersDsl.onUpdate(handler: suspend AbsSender.(Update) -> Unit) {
  */
 fun HandlersDsl.onCommand(command: String, handler: suspend AbsSender.(Update) -> Unit) {
     scope.launch {
-        val cmdRegex = Regex("^/$command(@${bot.me.userName})?(?:\\s+(.+))?\$", RegexOption.IGNORE_CASE)
+        val botUsername = (bot as? TelegramBot)?.botUsername
+        val cmdRegex = if (botUsername != null) {
+            Regex("^/$command(@$botUsername)?(?:\\s+(.+))?$", RegexOption.IGNORE_CASE)
+        } else {
+            Regex("^/$command(?:\\s+(.+))?$", RegexOption.IGNORE_CASE)
+        }
+
         updates.filter {
             it.hasMessage() && it.message.isCommand && it.message.text.matches(cmdRegex)
         }.collect { with(bot) { handler(it) } }

@@ -15,13 +15,17 @@ jobs:
       - name: Get latest TelegramBots version
         id: get_version
         run: |
-          JSON_RESPONSE=$(curl -s "https://search.maven.org/solrsearch/select?q=g:%22org.telegram%22+AND+a:%22telegrambots%22&core=gav&rows=1&wt=json")
-          if ! echo "$JSON_RESPONSE" | jq -e . >/dev/null 2>&1; then
-            echo "Error: Invalid JSON response from Maven Central"
-            echo "$JSON_RESPONSE"
-            exit 1
-          fi
-          LATEST_VERSION=$(echo "$JSON_RESPONSE" | jq -r '.response.docs[0].v')
+          # Retry up to 5 times if the response is invalid
+          for attempt in {1..5}; do
+            JSON_RESPONSE=$(curl -s "https://search.maven.org/solrsearch/select?q=g:%22org.telegram%22+AND+a:%22telegrambots%22&core=gav&rows=1&wt=json")
+            if echo "$JSON_RESPONSE" | jq -e . >/dev/null 2>&1; then
+              LATEST_VERSION=$(echo "$JSON_RESPONSE" | jq -r '.response.docs[0].v')
+              break
+            else
+              echo "Attempt $attempt: Invalid JSON response from Maven Central, retrying..."
+              sleep 5
+            fi
+          done
           if [ -z "$LATEST_VERSION" ] || [ "$LATEST_VERSION" == "null" ]; then
             echo "Error: Could not extract latest version from Maven Central response"
             echo "$JSON_RESPONSE"
