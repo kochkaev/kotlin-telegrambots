@@ -139,8 +139,8 @@ kotlin {
 }
 
 mavenPublishing {
-    publishToMavenCentral(com.vanniktech.maven.publish.SonatypeHost.S01)
-    if (project.hasProperty("signing.key")) {
+    publishToMavenCentral(automaticRelease = true)
+    if (project.hasProperty("signingInMemoryKey")) {
         signAllPublications()
     }
 
@@ -166,6 +166,11 @@ mavenPublishing {
             developerConnection.set("scm:git:ssh://github.com/kochkaev/kotlin-telegrambots.git")
             url.set("https://github.com/kochkaev/kotlin-telegrambots/tree/main")
         }
+    }
+}
+publishing {
+    repositories {
+        mavenLocal()
     }
 }
 
