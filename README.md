@@ -1,6 +1,6 @@
 # Kotlin Coroutine Extensions for TelegramBots
 
-[![Build Status](https://img.shields.io/github/actions/workflow/status/your-username/kotlin-telegrambots/build.yml?branch=main)](https://github.com/kochkaev/kotlin-telegrambots/actions)
+[![Build Status](https://img.shields.io/github/actions/workflow/status/kochkaev/kotlin-telegrambots/build.yml?branch=main)](https://github.com/kochkaev/kotlin-telegrambots/actions)
 [![Maven Central](https://img.shields.io/maven-central/v/io.github.kochkaev/kotlin-telegrambots.svg?label=Maven%20Central)](https://search.maven.org/search?q=g:io.github.kochkaev%20AND%20a:kotlin-telegrambots)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
@@ -30,7 +30,7 @@ Add the library to your project's dependencies.
 ```kotlin
 // build.gradle.kts
 dependencies {
-    implementation("io.github.kochkaev:kotlin-telegrambots:1.0.6-6.9.7.1") // Use the latest version
+    implementation("io.github.kochkaev:kotlin-telegrambots:1.0.6+6.9.7.1") // Use the latest version
 }
 ```
 
