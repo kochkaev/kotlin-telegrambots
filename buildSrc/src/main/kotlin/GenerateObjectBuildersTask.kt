@@ -6,9 +6,9 @@ import org.telegram.telegrambots.meta.api.interfaces.BotApiObject
 import java.lang.reflect.Method
 import java.util.*
 
-abstract class GenerateObjectBuildersTask : AbstractGeneratorTask() {
+abstract class GenerateObjectBuildersTask : AbstractReflectionGeneratorTask() {
 
-    @Internal override val targetPackageName = "io.github.kochkaev.kotlin.telegrambots"
+    @Internal override val targetPackageName = "io.github.kochkaev.kotlin.telegrambots.dsl"
     @Internal override val targetFileName = "ObjectBuilders"
     @Internal override val reflectionBaseClass = BotApiObject::class.java
 

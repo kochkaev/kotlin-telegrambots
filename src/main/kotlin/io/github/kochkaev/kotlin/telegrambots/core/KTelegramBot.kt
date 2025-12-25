@@ -5,14 +5,19 @@ package io.github.kochkaev.kotlin.telegrambots.core
 import io.github.kochkaev.kotlin.telegrambots.core.receivers.BotReceiver
 import io.github.kochkaev.kotlin.telegrambots.core.receivers.KLongPollingReceiver
 import io.github.kochkaev.kotlin.telegrambots.core.receivers.KWebhookReceiver
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import org.telegram.telegrambots.bots.DefaultBotOptions
 import org.telegram.telegrambots.meta.TelegramBotsApi
 import org.telegram.telegrambots.meta.api.methods.GetMe
 import org.telegram.telegrambots.meta.api.methods.updates.SetWebhook
 import org.telegram.telegrambots.meta.api.objects.Update
+import org.telegram.telegrambots.meta.api.objects.User
 import org.telegram.telegrambots.meta.generics.TelegramBot
 import org.telegram.telegrambots.meta.generics.Webhook
 import org.telegram.telegrambots.updatesreceivers.DefaultBotSession
@@ -23,24 +28,46 @@ import org.telegram.telegrambots.updatesreceivers.DefaultWebhook
  * It provides suspendable versions of `execute` methods and a Flow of updates.
  *
  * @param botToken The Telegram Bot API token.
- * @param botUsername The bot's username. If null, it will be fetched automatically on start.
+ * @param botUsername The bot's username. If null, it will be fetched automatically on the first API call.
  * @param botPath The bot's path for webhooks.
  * @param options Custom bot options.
  */
-open class KTelegramBot(
+open class KTelegramBot (
     private val botToken: String,
-    botUsername: String? = null,
+    @Volatile private var botUsername: String? = null,
     var botPath: String? = botUsername,
+    override val coroutineScope: CoroutineScope = CoroutineScope(Dispatchers.IO),
     options: DefaultBotOptions = DefaultBotOptions(),
-) : DefaultKAbsSender(options, botToken), FlowTelegramBot, TelegramBot {
+) :
+    // Generated class, extends DefaultAbsSender and implements coroutine-based `executeK` methods
+    DefaultKAbsSender(options, botToken),
+    FlowTelegramBot, TelegramBot, WithCoroutineScope
+{
 
     override fun getBotToken(): String = botToken
+    override fun getBotUsername(): String? = botUsername
 
-    // Store the username provided in the constructor, or the one we fetch.
-    private var resolvedBotUsername: String? = botUsername
-    override fun getBotUsername(): String? = resolvedBotUsername
+    @Volatile
+    private var me: User? = null
+    private val meMutex = Mutex()
 
-    internal val mutableUpdates = MutableSharedFlow<Update>()
+    /**
+     * Lazily and safely fetches and caches the 'me' User object.
+     * This is the correct, non-blocking way to do lazy initialization with a suspend function.
+     */
+    suspend fun getStoredMe(): User {
+        me?.let { return it }
+        return meMutex.withLock {
+            // Double-check in case another coroutine just fetched it
+            me?.let { return it }
+            val user = sendApiMethodK(GetMe())
+            botUsername = user.userName
+            me = user
+            user
+        }
+    }
+
+    protected val mutableUpdates = MutableSharedFlow<Update>()
     override val updates: Flow<Update> = mutableUpdates.asSharedFlow()
 
     private var receiver: BotReceiver? = null
@@ -52,15 +79,6 @@ open class KTelegramBot(
     val isWebhookRunning: Boolean
         get() = receiver is KWebhookReceiver
 
-    /**
-     * Fetches the bot's username using getMe() if it hasn't been provided or fetched already.
-     */
-    private suspend fun getOrFetchUsername(): String {
-        resolvedBotUsername?.let { return it }
-        val me = sendApiMethodK(GetMe())
-        return me.userName.also { resolvedBotUsername = it }
-    }
-
     fun modifyOptions(block: DefaultBotOptions.() -> Unit) {
         options.block()
     }
@@ -70,7 +88,7 @@ open class KTelegramBot(
      */
     suspend fun startLongPolling() {
         receiver?.stop()
-        getOrFetchUsername() // Ensure username is resolved before starting
+        getStoredMe() // Ensure 'me' is fetched and username is resolved before starting
         val longPollingReceiver = KLongPollingReceiver(this)
         receiver = longPollingReceiver
         val botsApi = TelegramBotsApi(DefaultBotSession::class.java)
@@ -82,7 +100,7 @@ open class KTelegramBot(
      */
     suspend fun startWebhook(setWebhook: SetWebhook, webhook: Webhook = DefaultWebhook()) {
         receiver?.stop()
-        getOrFetchUsername() // Ensure username is resolved before starting
+        getStoredMe() // Ensure 'me' is fetched and username is resolved before starting
         val webhookReceiver = KWebhookReceiver(this)
         receiver = webhookReceiver
         val botsApi = TelegramBotsApi(DefaultBotSession::class.java, webhook)
@@ -107,5 +125,9 @@ open class KTelegramBot(
     suspend fun stop() {
         receiver?.stop()
         receiver = null
+    }
+
+    internal fun emitUpdate(update: Update) {
+        mutableUpdates.tryEmit(update)
     }
 }

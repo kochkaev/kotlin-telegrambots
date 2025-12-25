@@ -12,7 +12,7 @@ import org.telegram.telegrambots.meta.generics.TelegramBot
  * A DSL for configuring update handlers on top of a [kotlinx.coroutines.flow.Flow].
  * This class is intended to be extended by generated functions.
  */
-class HandlersDsl(
+open class HandlersDsl(
     internal val bot: AbsSender,
     internal val scope: CoroutineScope,
     internal val updates: Flow<Update>
