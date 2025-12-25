@@ -65,7 +65,7 @@ val unzipTelegrambotsSources = tasks.register<Sync>("unzipTelegrambotsSources") 
     into(unzippedBotSourcesDir)
 }
 
-val generateTelegramBotExtensions = tasks.register<GenerateExtensionsTask>("generateTelegramBotExtensions") {
+val generateTelegramBotExtensions = tasks.register<GenerateTelegramBotExtensionsTask>("generateTelegramBotExtensions") {
     group = "build"
     description = "Generates high-level, idiomatic Kotlin extensions for API methods."
     sourcesDir.set(unzippedMetaSourcesDir)
@@ -89,9 +89,9 @@ val generateHandlersDsl = tasks.register<GenerateHandlersDslTask>("generateHandl
     dependsOn(unzipTelegramMetaSources)
 }
 
-val generateKTelegramBot = tasks.register<GenerateKTelegramBotTask>("generateKTelegramBot") {
+val generateDefaultKAbsSender = tasks.register<GenerateDefaultKAbsSenderTask>("generateDefaultKAbsSender") {
     group = "build"
-    description = "Generates a suspendable KTelegramBot wrapper."
+    description = "Generates a suspendable wrapper for DefaultAbsSender."
     botSourcesDir.set(unzippedBotSourcesDir)
     metaSourcesDir.set(unzippedMetaSourcesDir)
     outputDir.set(file(generatedSrcDir))
@@ -101,7 +101,7 @@ val generateKTelegramBot = tasks.register<GenerateKTelegramBotTask>("generateKTe
 val generateAll = tasks.register("generateAll") {
     group = "build"
     description = "Runs all code generation tasks."
-    dependsOn(generateTelegramBotExtensions, generateObjectBuilders, generateHandlersDsl, generateKTelegramBot)
+    dependsOn(generateTelegramBotExtensions, generateObjectBuilders, generateHandlersDsl, generateDefaultKAbsSender)
 }
 
 tasks.named("compileKotlin") {
@@ -109,7 +109,7 @@ tasks.named("compileKotlin") {
 }
 
 group = "io.github.kochkaev"
-version = "$projectVersion-$telegrambotsVersion"
+version = "$projectVersion+$telegrambotsVersion"
 
 
 
@@ -146,9 +146,6 @@ kotlin {
 mavenPublishing {
     publishToMavenCentral(automaticRelease = true)
     signAllPublications()
-//    if (project.hasProperty("signingInMemoryKey") || project.hasProperty("signing.key")) {
-//        signAllPublications()
-//    }
 
     pom {
         name.set("Kotlin Telegram Bots Extensions")

@@ -8,11 +8,21 @@ import java.lang.reflect.Method
 import java.lang.reflect.ParameterizedType
 import java.util.*
 
-abstract class GenerateExtensionsTask : AbstractGeneratorTask() {
+abstract class GenerateTelegramBotExtensionsTask : AbstractReflectionGeneratorTask() {
 
-    @Internal override val targetPackageName = "io.github.kochkaev.kotlin.telegrambots"
+    @Internal override val targetPackageName = "io.github.kochkaev.kotlin.telegrambots.dsl"
     @Internal override val targetFileName = "TelegramBotExtensions"
     @Internal override val reflectionBaseClass = BotApiMethod::class.java
+
+    private fun <T> cartesianProduct(lists: List<List<T>>): List<List<T>> {
+        if (lists.isEmpty()) return listOf(emptyList())
+        val head = lists.first()
+        val tail = lists.drop(1)
+        val tailProduct = cartesianProduct(tail)
+        return head.flatMap { item ->
+            tailProduct.map { product -> listOf(item) + product }
+        }
+    }
 
     private fun findBotApiMethodReturnType(clazz: Class<*>): java.lang.reflect.Type? {
         val typesToCheck = mutableListOf<java.lang.reflect.Type>()

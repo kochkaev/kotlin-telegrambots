@@ -31,6 +31,7 @@ inline fun telegramBot(
         botToken = token,
         botUsername = username,
         botPath = botPath,
+        coroutineScope = scope,
         options = botOptions
     )
     HandlersDsl(bot, scope, bot.updates).apply(block)

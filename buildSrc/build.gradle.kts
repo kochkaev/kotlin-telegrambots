@@ -24,4 +24,5 @@ dependencies {
     implementation("org.reflections:reflections:$reflectionsVersion")
     implementation("org.projectlombok:lombok:$lombokVersion")
     implementation("com.github.javaparser:javaparser-core:$javaparserCoreVersion")
+    implementation("com.github.javaparser:javaparser-symbol-solver-core:$javaparserCoreVersion") // Add the symbol solver
 }
