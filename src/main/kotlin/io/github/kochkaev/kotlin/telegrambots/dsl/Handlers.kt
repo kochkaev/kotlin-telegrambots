@@ -13,9 +13,9 @@ import org.telegram.telegrambots.meta.generics.TelegramBot
  * This class is intended to be extended by generated functions.
  */
 open class HandlersDsl(
-    internal val bot: AbsSender,
-    internal val scope: CoroutineScope,
-    internal val updates: Flow<Update>
+    val bot: AbsSender,
+    val scope: CoroutineScope,
+    val updates: Flow<Update>
 )
 
 /**
