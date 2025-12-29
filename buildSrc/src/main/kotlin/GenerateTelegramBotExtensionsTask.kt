@@ -68,28 +68,27 @@ abstract class GenerateTelegramBotExtensionsTask : AbstractReflectionGeneratorTa
             .filter { it.name.startsWith("set") && it.parameterCount == 1 && java.lang.reflect.Modifier.isPublic(it.modifiers) }
             .groupBy { it.name.substring(3).replaceFirstChar { c -> c.lowercase() } }
 
-        val (requiredSetters, optionalSetters) = setters.entries.partition { (propertyName, _) ->
-            propertyName in fieldsWithNonNull
+        if (setters.isEmpty()) return 0
+
+        val (overloadedSetters, singleSetters) = setters.entries.partition { (_, setterGroup) ->
+            setterGroup.size > 1
         }
 
-        if (requiredSetters.isEmpty() && optionalSetters.isEmpty()) return 0
-
-        val requiredSetterCombinations = if (requiredSetters.isNotEmpty()) {
-            cartesianProduct(requiredSetters.map { it.value })
+        val combinationSetters = if (overloadedSetters.isNotEmpty()) {
+            cartesianProduct(overloadedSetters.map { it.value })
         } else {
             listOf(emptyList())
         }
 
-        val (deprecatedOptionalSetters, nonDeprecatedOptionalSetters) = optionalSetters.partition { (propertyName, _) ->
-            propertyName in deprecatedFields
-        }
-
-        val nonDeprecatedOptionalParams = nonDeprecatedOptionalSetters.map { (propertyName, setterGroup) ->
-            val representativeSetter = setterGroup.first()
-            ParameterSpec.builder(propertyName, representativeSetter.genericParameterTypes.first().asTypeName().toKotlinType().copy(nullable = true))
-                .defaultValue("null")
+        val singleParamsData = singleSetters.map { (propertyName, setterGroup) ->
+            val setter = setterGroup.first()
+            val isRequired = propertyName in fieldsWithNonNull
+            val paramType = setter.genericParameterTypes.first().asTypeName().toKotlinType()
+            val param = ParameterSpec.builder(propertyName, if (isRequired) paramType else paramType.copy(nullable = true))
+                .apply { if (!isRequired) defaultValue("null") }
                 .build()
-        }.sortedBy { it.name }
+            param to setter
+        }
 
         val isClassDeprecated = classDecl.isAnnotationPresent("Deprecated")
         val classDeprecationMessage = if (isClassDeprecated) {
@@ -101,20 +100,27 @@ abstract class GenerateTelegramBotExtensionsTask : AbstractReflectionGeneratorTa
         }
 
         var functionsGenerated = 0
-        requiredSetterCombinations.forEach { combination ->
-            val requiredParams = combination.map { setter ->
+        combinationSetters.forEach { combination ->
+            val combinationParamsData = combination.map { setter ->
                 val propertyName = setter.name.substring(3).replaceFirstChar { c -> c.lowercase() }
-                ParameterSpec.builder(propertyName, setter.genericParameterTypes.first().asTypeName().toKotlinType()).build()
+                val isRequired = propertyName in fieldsWithNonNull
+                val paramType = setter.genericParameterTypes.first().asTypeName().toKotlinType()
+                val param = ParameterSpec.builder(propertyName, if (isRequired) paramType else paramType.copy(nullable = true))
+                    .apply { if (!isRequired) defaultValue("null") }
+                    .build()
+                param to setter
             }
 
-            val deprecatedRequiredProperties = combination.map { it.name.substring(3).replaceFirstChar { c -> c.lowercase() } }.filter { it in deprecatedFields }
-            val isCombinationDeprecated = deprecatedRequiredProperties.isNotEmpty()
+            val allParamsData = (singleParamsData + combinationParamsData).sortedBy { it.first.name }
 
-            val combinationDeprecationMessage = if (isCombinationDeprecated) {
-                val messages = deprecatedRequiredProperties.joinToString(separator = "\n") { prop ->
+            val deprecatedProperties = allParamsData.map { it.first.name }.filter { it in deprecatedFields }
+            val isFunctionDeprecated = deprecatedProperties.isNotEmpty()
+
+            val deprecationMessage = if (isFunctionDeprecated) {
+                val messages = deprecatedProperties.joinToString(separator = "\n") { prop ->
                     "- '$prop': ${deprecatedFieldsWithMessages[prop]}"
                 }
-                "This function uses deprecated required parameters:\n$messages"
+                "This function uses deprecated parameters:\n$messages"
             } else null
 
             generateFunction(
@@ -122,43 +128,11 @@ abstract class GenerateTelegramBotExtensionsTask : AbstractReflectionGeneratorTa
                 clazz,
                 functionName,
                 returnType,
-                requiredParams,
-                nonDeprecatedOptionalParams,
-                setters,
-                combination,
-                isClassDeprecated || isCombinationDeprecated,
-                classDeprecationMessage ?: combinationDeprecationMessage
+                allParamsData,
+                isClassDeprecated || isFunctionDeprecated,
+                classDeprecationMessage ?: deprecationMessage
             )
             functionsGenerated++
-
-            if (deprecatedOptionalSetters.isNotEmpty()) {
-                val deprecatedOptionalParams = deprecatedOptionalSetters.map { (propertyName, setterGroup) ->
-                    val representativeSetter = setterGroup.first()
-                    ParameterSpec.builder(propertyName, representativeSetter.genericParameterTypes.first().asTypeName().toKotlinType().copy(nullable = true))
-                        .defaultValue("null")
-                        .build()
-                }.sortedBy { it.name }
-
-                val deprecatedOptionalProperties = deprecatedOptionalSetters.map { it.key }
-                val allDeprecatedProperties = (deprecatedRequiredProperties + deprecatedOptionalProperties).distinct()
-                val deprecationMessage = allDeprecatedProperties.joinToString(separator = "\n") { prop ->
-                    "- '$prop': ${deprecatedFieldsWithMessages[prop]}"
-                }
-
-                generateFunction(
-                    fileSpecBuilder,
-                    clazz,
-                    functionName,
-                    returnType,
-                    requiredParams,
-                    nonDeprecatedOptionalParams + deprecatedOptionalParams,
-                    setters,
-                    combination,
-                    true,
-                    classDeprecationMessage ?: "This function includes deprecated parameters:\n$deprecationMessage"
-                )
-                functionsGenerated++
-            }
         }
         return functionsGenerated
     }
@@ -168,10 +142,7 @@ abstract class GenerateTelegramBotExtensionsTask : AbstractReflectionGeneratorTa
         clazz: Class<*>,
         functionName: String,
         returnType: java.lang.reflect.Type,
-        requiredParams: List<ParameterSpec>,
-        optionalParams: List<ParameterSpec>,
-        setters: Map<String, List<Method>>,
-        combination: List<Method>,
+        allParamsData: List<Pair<ParameterSpec, Method>>,
         deprecated: Boolean,
         deprecationMessage: String?
     ) {
@@ -185,8 +156,7 @@ abstract class GenerateTelegramBotExtensionsTask : AbstractReflectionGeneratorTa
             .receiver(AbsSender::class)
             .returns(finalReturnType)
             .addKdoc("Extension function for [%T.executeAsync] and [%T].\n\n@see %T", AbsSender::class, clazz, clazz)
-            .addParameters(requiredParams.sortedBy { it.name })
-            .addParameters(optionalParams)
+            .addParameters(allParamsData.map { it.first })
             .addStatement("val apiMethod = %T()", clazz.asTypeName())
 
         if (deprecated) {
@@ -195,20 +165,18 @@ abstract class GenerateTelegramBotExtensionsTask : AbstractReflectionGeneratorTa
                 .build())
         }
 
-        combination.forEach { setter ->
-            val propertyName = setter.name.substring(3).replaceFirstChar { c -> c.lowercase() }
-            funSpecBuilder.addStatement("apiMethod.${setter.name}($propertyName)")
-        }
-
-        optionalParams.forEach { param ->
-            val setter = setters[param.name]!!.first()
-            funSpecBuilder.addCode(
-                CodeBlock.builder()
-                    .beginControlFlow("if (${param.name} != null)")
-                    .addStatement("apiMethod.${setter.name}(${param.name})")
-                    .endControlFlow()
-                    .build()
-            )
+        allParamsData.forEach { (param, setter) ->
+            if (param.type.isNullable) {
+                funSpecBuilder.addCode(
+                    CodeBlock.builder()
+                        .beginControlFlow("if (${param.name} != null)")
+                        .addStatement("apiMethod.${setter.name}(${param.name})")
+                        .endControlFlow()
+                        .build()
+                )
+            } else {
+                funSpecBuilder.addStatement("apiMethod.${setter.name}(${param.name})")
+            }
         }
 
         if (finalReturnType == UNIT) {
