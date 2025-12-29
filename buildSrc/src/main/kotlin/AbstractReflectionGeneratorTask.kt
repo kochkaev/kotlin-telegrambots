@@ -16,7 +16,7 @@ import org.reflections.scanners.Scanners
 import org.reflections.util.ConfigurationBuilder
 import java.lang.reflect.Method
 import java.lang.reflect.Modifier
-import java.util.Optional
+import java.util.*
 
 abstract class AbstractReflectionGeneratorTask : AbstractGeneratorTask() {
 
@@ -33,13 +33,18 @@ abstract class AbstractReflectionGeneratorTask : AbstractGeneratorTask() {
     ): Int
 
     protected fun getAllMethods(clazz: Class<*>): List<Method> {
-        val methods = mutableListOf<Method>()
+        val methods = linkedMapOf<String, Method>()
         var currentClass: Class<*>? = clazz
         while (currentClass != null && currentClass != Object::class.java) {
-            methods.addAll(currentClass.declaredMethods)
+            currentClass.declaredMethods.forEach { method ->
+                val signature = method.name + method.parameterTypes.contentToString()
+                if (!methods.containsKey(signature)) {
+                    methods[signature] = method
+                }
+            }
             currentClass = currentClass.superclass
         }
-        return methods
+        return methods.values.toList()
     }
 
     protected fun <T> T?.optional(): Optional<T & Any> = Optional.ofNullable(this)

@@ -30,7 +30,7 @@ Add the library to your project's dependencies.
 ```kotlin
 // build.gradle.kts
 dependencies {
-    implementation("io.github.kochkaev:kotlin-telegrambots:1.0.7+6.9.7.1") // Use the latest version
+    implementation("io.github.kochkaev:kotlin-telegrambots:1.0.8+6.9.7.1") // Use the latest version
 }
 ```
 
