@@ -4,6 +4,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
+import org.telegram.telegrambots.meta.api.objects.Message
 import org.telegram.telegrambots.meta.api.objects.Update
 import org.telegram.telegrambots.meta.bots.AbsSender
 import org.telegram.telegrambots.meta.generics.TelegramBot
@@ -31,7 +32,7 @@ fun HandlersDsl.onUpdate(handler: suspend AbsSender.(Update) -> Unit) {
  * Registers a handler for commands.
  * A command is a message that starts with "/".
  */
-fun HandlersDsl.onCommand(command: String, handler: suspend AbsSender.(Update) -> Unit) {
+fun HandlersDsl.onCommand(command: String, handler: suspend AbsSender.(Message) -> Unit) {
     scope.launch {
         val botUsername = (bot as? TelegramBot)?.botUsername
         val cmdRegex = if (botUsername != null) {
@@ -42,6 +43,6 @@ fun HandlersDsl.onCommand(command: String, handler: suspend AbsSender.(Update) -
 
         updates.filter {
             it.hasMessage() && it.message.isCommand && it.message.text.matches(cmdRegex)
-        }.collect { with(bot) { handler(it) } }
+        }.collect { with(bot) { handler(it.message) } }
     }
 }
