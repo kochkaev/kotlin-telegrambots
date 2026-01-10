@@ -46,9 +46,11 @@ val generateObjectBuilders = tasks.register<GenerateObjectBuildersTask>("generat
 tasks.named("compileKotlin") {
     dependsOn(generateTelegramBotExtensions, generateObjectBuilders)
 }
-//tasks.named("sourcesJar") {
-//    dependsOn(generateTelegramBotExtensions, generateObjectBuilders)
-//}
 tasks.named("kotlinSourcesJar") {
     dependsOn(generateTelegramBotExtensions, generateObjectBuilders)
+}
+afterEvaluate {
+    tasks.named("sourcesJar") {
+        dependsOn(generateTelegramBotExtensions, generateObjectBuilders)
+    }
 }
