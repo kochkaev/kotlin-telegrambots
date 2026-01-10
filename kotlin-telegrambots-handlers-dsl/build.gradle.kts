@@ -10,7 +10,7 @@ val generatedSrcDir = layout.buildDirectory.dir("generated/source/kotlin")
 val telegramMetaSources: Configuration by configurations.creating
 
 dependencies {
-    api(project(":meta"))
+    api(project(":kotlin-telegrambots-meta"))
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:${project.property("kotlinxCoroutinesVersion")}")
 
     telegramMetaSources("org.telegram:telegrambots-meta:$telegrambotsVersion:sources") {

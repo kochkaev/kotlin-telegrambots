@@ -16,9 +16,9 @@ dependencyResolutionManagement {
 rootProject.name = "kotlin-telegrambots"
 
 include(
-    ":meta",
-    ":handlers-dsl",
-    ":core",
-    ":longpolling",
-    ":client-okhttp"
+    ":kotlin-telegrambots-meta",
+    ":kotlin-telegrambots-handlers-dsl",
+    ":kotlin-telegrambots-core",
+    ":kotlin-telegrambots-longpolling",
+    ":kotlin-telegrambots-client-okhttp"
 )

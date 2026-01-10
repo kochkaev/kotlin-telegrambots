@@ -31,8 +31,8 @@ Add the library to your project's dependencies.
 // build.gradle.kts
 dependencies {
     // Use lasted version
-    implementation("io.github.kochkaev.kotlin-telegrambots:longpolling:1.1.0+9.2.0") // For long polling
-    implementation("io.github.kochkaev.kotlin-telegrambots:handlers-dsl:1.1.0+9.2.0") // For the handlers DSL
+    implementation("io.github.kochkaev:kotlin-telegrambots-longpolling:1.1.0+9.2.0") // For long polling
+    implementation("io.github.kochkaev:kotlin-telegrambots-handlers-dsl:1.1.0+9.2.0") // For the handlers DSL
 }
 ```
 

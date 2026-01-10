@@ -8,8 +8,8 @@ val telegramClientSources: Configuration by configurations.creating
 val telegramClientClasspath: Configuration by configurations.creating
 
 dependencies {
-    api(project(":meta"))
-    api(project(":handlers-dsl"))
+    api(project(":kotlin-telegrambots-meta"))
+    api(project(":kotlin-telegrambots-handlers-dsl"))
     api("org.telegram:telegrambots-meta:$telegrambotsVersion")
 
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:${project.property("kotlinxCoroutinesVersion")}")

@@ -6,7 +6,7 @@ plugins {
 }
 
 allprojects {
-    group = "io.github.kochkaev.kotlin-telegrambots"
+    group = "io.github.kochkaev"
     version = "${property("projectVersion") as String}+${property("telegrambotsVersion") as String}"
 
     repositories {
