@@ -17,7 +17,7 @@ jobs:
         run: |
           # Retry up to 5 times if the response is invalid
           for attempt in {1..5}; do
-            JSON_RESPONSE=$(curl -s "https://search.maven.org/solrsearch/select?q=g:%22org.telegram%22+AND+a:%22telegrambots%22&core=gav&rows=1&wt=json")
+            JSON_RESPONSE=$(curl -s "https://search.maven.org/solrsearch/select?q=g:%22org.telegram%22+AND+a:%22telegrambots%22&meta=gav&rows=1&wt=json")
             if echo "$JSON_RESPONSE" | jq -e . >/dev/null 2>&1; then
               LATEST_VERSION=$(echo "$JSON_RESPONSE" | jq -r '.response.docs[0].v')
               break

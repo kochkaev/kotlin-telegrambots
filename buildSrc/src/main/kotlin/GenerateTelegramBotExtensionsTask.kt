@@ -1,18 +1,26 @@
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration
 import com.github.javaparser.ast.body.FieldDeclaration
-import com.squareup.kotlinpoet.*
+import com.squareup.kotlinpoet.AnnotationSpec
+import com.squareup.kotlinpoet.ClassName
+import com.squareup.kotlinpoet.CodeBlock
+import com.squareup.kotlinpoet.FileSpec
+import com.squareup.kotlinpoet.FunSpec
+import com.squareup.kotlinpoet.KModifier
+import com.squareup.kotlinpoet.ParameterSpec
+import com.squareup.kotlinpoet.UNIT
+import com.squareup.kotlinpoet.asTypeName
 import org.gradle.api.tasks.Internal
-import org.telegram.telegrambots.meta.api.methods.BotApiMethod
-import org.telegram.telegrambots.meta.bots.AbsSender
+import org.telegram.telegrambots.meta.api.methods.botapimethods.PartialBotApiMethod
+import org.telegram.telegrambots.meta.generics.TelegramClient
 import java.lang.reflect.Method
 import java.lang.reflect.ParameterizedType
-import java.util.*
+import java.util.Optional
 
 abstract class GenerateTelegramBotExtensionsTask : AbstractReflectionGeneratorTask() {
 
     @Internal override val targetPackageName = "io.github.kochkaev.kotlin.telegrambots.dsl"
     @Internal override val targetFileName = "TelegramBotExtensions"
-    @Internal override val reflectionBaseClass = BotApiMethod::class.java
+    @Internal override val reflectionBaseClass = PartialBotApiMethod::class.java
 
     private fun <T> cartesianProduct(lists: List<List<T>>): List<List<T>> {
         if (lists.isEmpty()) return listOf(emptyList())
@@ -30,7 +38,7 @@ abstract class GenerateTelegramBotExtensionsTask : AbstractReflectionGeneratorTa
         typesToCheck.addAll(clazz.genericInterfaces)
 
         for (type in typesToCheck) {
-            if (type is ParameterizedType && type.rawType == BotApiMethod::class.java) {
+            if (type is ParameterizedType) {
                 return type.actualTypeArguments.firstOrNull()
             }
         }
@@ -40,7 +48,8 @@ abstract class GenerateTelegramBotExtensionsTask : AbstractReflectionGeneratorTa
     override fun generateFunctionsForClass(
         fileSpecBuilder: FileSpec.Builder,
         clazz: Class<*>,
-        classDecl: ClassOrInterfaceDeclaration
+        classDecl: ClassOrInterfaceDeclaration,
+        noArgConstructor: Boolean
     ): Int {
         fileSpecBuilder.addImport("kotlinx.coroutines.future", "await")
 
@@ -64,30 +73,45 @@ abstract class GenerateTelegramBotExtensionsTask : AbstractReflectionGeneratorTa
         val returnType = findBotApiMethodReturnType(clazz) ?: return 0
         val functionName = clazz.simpleName.replaceFirstChar { it.lowercase() }
 
-        val setters = getAllMethods(clazz)
-            .filter { it.name.startsWith("set") && it.parameterCount == 1 && java.lang.reflect.Modifier.isPublic(it.modifiers) }
-            .groupBy { it.name.substring(3).replaceFirstChar { c -> c.lowercase() } }
+        val methods =
+            if (!noArgConstructor) {
+                val builderMethod = try {
+                    clazz.getMethod("builder")
+                } catch (_: NoSuchMethodException) {
+                    return 0 // No builder method
+                }
+                if (!java.lang.reflect.Modifier.isStatic(builderMethod.modifiers)) {
+                    return 0 // builder() is not static
+                }
+                val builderClass = builderMethod.returnType
+                getAllMethods(builderClass)
+                    .filter { it.parameterCount == 1 && java.lang.reflect.Modifier.isPublic(it.modifiers) && it.returnType == builderClass }
+                    .groupBy { it.name }
+            }
+            else getAllMethods(clazz)
+                .filter { it.name.startsWith("set") && it.parameterCount == 1 && java.lang.reflect.Modifier.isPublic(it.modifiers) }
+                .groupBy { it.name.substring(3).replaceFirstChar { c -> c.lowercase() } }
 
-        if (setters.isEmpty()) return 0
+        if (methods.isEmpty()) return 0
 
-        val (overloadedSetters, singleSetters) = setters.entries.partition { (_, setterGroup) ->
-            setterGroup.size > 1
+        val (overloadedMethods, singleMethods) = methods.entries.partition { (_, methodGroup) ->
+            methodGroup.size > 1
         }
 
-        val combinationSetters = if (overloadedSetters.isNotEmpty()) {
-            cartesianProduct(overloadedSetters.map { it.value })
+        val combinationMethods = if (overloadedMethods.isNotEmpty()) {
+            cartesianProduct(overloadedMethods.map { it.value })
         } else {
             listOf(emptyList())
         }
 
-        val singleParamsData = singleSetters.map { (propertyName, setterGroup) ->
-            val setter = setterGroup.first()
+        val singleParamsData = singleMethods.map { (propertyName, methodGroup) ->
+            val method = methodGroup.first()
             val isRequired = propertyName in fieldsWithNonNull
-            val paramType = setter.genericParameterTypes.first().asTypeName().toKotlinType()
+            val paramType = method.genericParameterTypes.first().asTypeName().toKotlinType()
             val param = ParameterSpec.builder(propertyName, if (isRequired) paramType else paramType.copy(nullable = true))
                 .apply { if (!isRequired) defaultValue("null") }
                 .build()
-            param to setter
+            param to method
         }
 
         val isClassDeprecated = classDecl.isAnnotationPresent("Deprecated")
@@ -100,15 +124,15 @@ abstract class GenerateTelegramBotExtensionsTask : AbstractReflectionGeneratorTa
         }
 
         var functionsGenerated = 0
-        combinationSetters.forEach { combination ->
-            val combinationParamsData = combination.map { setter ->
-                val propertyName = setter.name.substring(3).replaceFirstChar { c -> c.lowercase() }
+        combinationMethods.forEach { combination ->
+            val combinationParamsData = combination.map { method ->
+                val propertyName = method.name.let { if (noArgConstructor) it.substring(3).replaceFirstChar { c -> c.lowercase() } else it }
                 val isRequired = propertyName in fieldsWithNonNull
-                val paramType = setter.genericParameterTypes.first().asTypeName().toKotlinType()
+                val paramType = method.genericParameterTypes.first().asTypeName().toKotlinType()
                 val param = ParameterSpec.builder(propertyName, if (isRequired) paramType else paramType.copy(nullable = true))
                     .apply { if (!isRequired) defaultValue("null") }
                     .build()
-                param to setter
+                param to method
             }
 
             val allParamsData = (singleParamsData + combinationParamsData).sortedBy { it.first.name }
@@ -130,7 +154,8 @@ abstract class GenerateTelegramBotExtensionsTask : AbstractReflectionGeneratorTa
                 returnType,
                 allParamsData,
                 isClassDeprecated || isFunctionDeprecated,
-                classDeprecationMessage ?: deprecationMessage
+                classDeprecationMessage ?: deprecationMessage,
+                noArgConstructor
             )
             functionsGenerated++
         }
@@ -144,40 +169,44 @@ abstract class GenerateTelegramBotExtensionsTask : AbstractReflectionGeneratorTa
         returnType: java.lang.reflect.Type,
         allParamsData: List<Pair<ParameterSpec, Method>>,
         deprecated: Boolean,
-        deprecationMessage: String?
+        deprecationMessage: String?,
+        noArgConstructor: Boolean
     ) {
-        val finalReturnType: TypeName = when (val typeName = returnType.asTypeName().toKotlinType()) {
+        val finalReturnType = when (val typeName = returnType.asTypeName().toKotlinType()) {
             is ClassName -> if (typeName.canonicalName == "java.io.Serializable") UNIT else typeName
             else -> typeName
         }
 
         val funSpecBuilder = FunSpec.builder(functionName)
             .addModifiers(KModifier.SUSPEND)
-            .receiver(AbsSender::class)
+            .receiver(TelegramClient::class)
             .returns(finalReturnType)
-            .addKdoc("Extension function for [%T.executeAsync] and [%T].\n\n@see %T", AbsSender::class, clazz, clazz)
+            .addKdoc("Extension function for [%T.executeAsync] and [%T].\n\n@see %T", TelegramClient::class, clazz, clazz)
             .addParameters(allParamsData.map { it.first })
-            .addStatement("val apiMethod = %T()", clazz.asTypeName())
+            .addStatement("val builder = %T${if (!noArgConstructor) ".builder()" else "()"}", clazz.asTypeName())
 
         if (deprecated) {
-            funSpecBuilder.addAnnotation(AnnotationSpec.builder(Deprecated::class)
+            funSpecBuilder.addAnnotation(
+                AnnotationSpec.builder(Deprecated::class)
                 .addMember("message = %S", deprecationMessage ?: "This function is deprecated.")
                 .build())
         }
 
-        allParamsData.forEach { (param, setter) ->
+        allParamsData.forEach { (param, method) ->
             if (param.type.isNullable) {
                 funSpecBuilder.addCode(
                     CodeBlock.builder()
                         .beginControlFlow("if (${param.name} != null)")
-                        .addStatement("apiMethod.${setter.name}(${param.name})")
+                        .addStatement("builder.${method.name}(${param.name})")
                         .endControlFlow()
                         .build()
                 )
             } else {
-                funSpecBuilder.addStatement("apiMethod.${setter.name}(${param.name})")
+                funSpecBuilder.addStatement("builder.${method.name}(${param.name})")
             }
         }
+
+        funSpecBuilder.addStatement("val apiMethod = builder${if (!noArgConstructor) ".build()" else ""}")
 
         if (finalReturnType == UNIT) {
             funSpecBuilder.addStatement("this.executeAsync(apiMethod).await()")

@@ -29,7 +29,8 @@ abstract class AbstractReflectionGeneratorTask : AbstractGeneratorTask() {
     protected abstract fun generateFunctionsForClass(
         fileSpecBuilder: FileSpec.Builder,
         clazz: Class<*>,
-        classDecl: ClassOrInterfaceDeclaration
+        classDecl: ClassOrInterfaceDeclaration,
+        noArgConstructor: Boolean
     ): Int
 
     protected fun getAllMethods(clazz: Class<*>): List<Method> {
@@ -56,6 +57,10 @@ abstract class AbstractReflectionGeneratorTask : AbstractGeneratorTask() {
                 val typeArguments = this.typeArguments.map { it.toKotlinType() }.toTypedArray()
                 rawType.parameterizedBy(*typeArguments).copy(nullable = this.isNullable)
             }
+            is WildcardTypeName -> {
+                val type = this.inTypes.firstOrNull() ?: this.outTypes.first()
+                type.toKotlinType()
+            }
             is ClassName -> {
                 javaToKotlinMap[this.canonicalName]?.copy(nullable = this.isNullable) ?: this
             }
@@ -64,7 +69,7 @@ abstract class AbstractReflectionGeneratorTask : AbstractGeneratorTask() {
     }
 
     @TaskAction
-    fun execute() {
+    open fun execute() {
         logger.info("Starting generation for $targetFileName")
 
         val fileSpecBuilder = FileSpec.builder(targetPackageName, targetFileName)
@@ -78,7 +83,8 @@ abstract class AbstractReflectionGeneratorTask : AbstractGeneratorTask() {
             ReflectionTypeSolver(),
             JavaParserTypeSolver(sourcesDir.get().asFile)
         )
-        val parserConfiguration = ParserConfiguration().setSymbolResolver(JavaSymbolSolver(typeSolver))
+        val symbolSolver = JavaSymbolSolver(typeSolver)
+        val parserConfiguration = ParserConfiguration().setSymbolResolver(symbolSolver)
         val javaParser = JavaParser(parserConfiguration)
 
         val classLoader = reflectionBaseClass.classLoader
@@ -97,13 +103,22 @@ abstract class AbstractReflectionGeneratorTask : AbstractGeneratorTask() {
 
         allSubClasses.forEach { clazz ->
             if (clazz.isAnonymousClass || Modifier.isAbstract(clazz.modifiers) || !Modifier.isPublic(clazz.modifiers)) return@forEach
-            try { clazz.getConstructor() } catch (_: NoSuchMethodException) { return@forEach }
+            var noArgConstructor = false
+            try {
+                val builderMethod = clazz.getMethod("builder")
+                if (!Modifier.isStatic(builderMethod.modifiers)) return@forEach
+            } catch (_: NoSuchMethodException) {
+                try {
+                    clazz.getConstructor()
+                    noArgConstructor = true
+                } catch (_: NoSuchMethodException) { return@forEach }
+            }
 
             val sourceFile = sourceFilesMap[clazz.simpleName] ?: return@forEach
             val cu = javaParser.parse(sourceFile).result.get()
             val classDecl = cu.findFirst(ClassOrInterfaceDeclaration::class.java) { it.nameAsString == clazz.simpleName }.orElse(null) ?: return@forEach
 
-            functionsGenerated += generateFunctionsForClass(fileSpecBuilder, clazz, classDecl)
+            functionsGenerated += generateFunctionsForClass(fileSpecBuilder, clazz, classDecl, noArgConstructor)
         }
 
         if (functionsGenerated > 0) {

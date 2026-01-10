@@ -10,7 +10,7 @@ import org.gradle.api.tasks.InputDirectory
 import org.gradle.api.tasks.Internal
 import org.gradle.api.tasks.OutputDirectory
 import org.gradle.api.tasks.TaskAction
-import org.telegram.telegrambots.meta.bots.AbsSender
+import org.telegram.telegrambots.meta.generics.TelegramClient
 
 abstract class GenerateHandlersDslTask : AbstractGeneratorTask() {
 
@@ -30,7 +30,8 @@ abstract class GenerateHandlersDslTask : AbstractGeneratorTask() {
             ReflectionTypeSolver(),
             JavaParserTypeSolver(sourcesDir.get().asFile)
         )
-        val parserConfiguration = ParserConfiguration().setSymbolResolver(JavaSymbolSolver(typeSolver))
+        val symbolResolver = JavaSymbolSolver(typeSolver)
+        val parserConfiguration = ParserConfiguration().setSymbolResolver(symbolResolver)
         val javaParser = JavaParser(parserConfiguration)
 
         val updateFile = sourcesDir.get().asFile.walk().first { it.isFile && it.name == "Update.java" }
@@ -57,12 +58,12 @@ abstract class GenerateHandlersDslTask : AbstractGeneratorTask() {
 
             if (methodNames.contains(hasMethodName)) {
                 val handlerName = "on$capitalizedFieldName"
-                val fieldType = field.elementType.toKotlinTypeName()
+                val fieldType = field.elementType.toKotlinTypeName(symbolResolver = symbolResolver)
 
                 val funSpec = FunSpec.builder(handlerName)
-                    .receiver(ClassName(targetPackageName, "HandlersDsl"))
-                    .addParameter("handler", LambdaTypeName.get(receiver = AbsSender::class.asTypeName(), parameters = listOf(ParameterSpec.unnamed(fieldType)), returnType = UNIT).copy(suspending = true))
-                    .addStatement("scope.launch { updates.filter { it.%L() }.collect { with(bot) { handler(it.%L) } } }", hasMethodName, fieldName)
+                    .receiver(ClassName(targetPackageName, "HandlersScope"))
+                    .addParameter("handler", LambdaTypeName.get(receiver = TelegramClient::class.asTypeName(), parameters = listOf(ParameterSpec.unnamed(fieldType)), returnType = UNIT).copy(suspending = true))
+                    .addStatement("coroutine.launch { sourceFlow.filter { it.%L() }.collect { with(client) { handler(it.%L) } } }", hasMethodName, fieldName)
                     .build()
                 fileSpecBuilder.addFunction(funSpec)
                 functionsGenerated++
