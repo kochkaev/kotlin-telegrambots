@@ -1,11 +1,24 @@
 
-dependencyResolutionManagement {
-    // Use Maven Central as the default repository (where Gradle will download dependencies) in all subprojects.
-    @Suppress("UnstableApiUsage")
+pluginManagement {
     repositories {
         mavenCentral()
         gradlePluginPortal()
     }
 }
 
+dependencyResolutionManagement {
+    @Suppress("UnstableApiUsage")
+    repositories {
+        mavenCentral()
+    }
+}
+
 rootProject.name = "kotlin-telegrambots"
+
+include(
+    ":meta",
+    ":handlers-dsl",
+    ":core",
+    ":longpolling",
+    ":client-okhttp"
+)

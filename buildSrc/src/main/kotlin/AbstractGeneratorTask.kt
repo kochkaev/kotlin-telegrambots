@@ -1,7 +1,10 @@
 import com.github.javaparser.ast.body.MethodDeclaration
 import com.github.javaparser.ast.type.ClassOrInterfaceType
+import com.github.javaparser.ast.Node
 import com.github.javaparser.ast.type.Type
+import com.github.javaparser.resolution.SymbolResolver
 import com.github.javaparser.resolution.types.ResolvedReferenceType
+import com.github.javaparser.resolution.types.ResolvedType
 import com.squareup.kotlinpoet.*
 import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
 import org.gradle.api.DefaultTask
@@ -48,12 +51,12 @@ abstract class AbstractGeneratorTask : DefaultTask() {
         "java.util.concurrent.CompletableFuture" to ClassName("java.util.concurrent", "CompletableFuture")
     )
 
-    protected fun Type.toKotlinTypeName(method: MethodDeclaration? = null): TypeName {
+    protected fun Type.toKotlinTypeName(method: MethodDeclaration? = null, symbolResolver: SymbolResolver? = null): TypeName {
         if (method != null && this.isClassOrInterfaceType) {
             val typeName = this.asClassOrInterfaceType().name.asString()
             val methodTypeParam = method.typeParameters.firstOrNull { it.name.asString() == typeName }
             if (methodTypeParam != null) {
-                val bounds = methodTypeParam.typeBound.map { it.toKotlinTypeName(method) }
+                val bounds = methodTypeParam.typeBound.map { it.toKotlinTypeName(method, symbolResolver) }
                 return TypeVariableName(typeName, bounds)
             }
         }
@@ -62,21 +65,37 @@ abstract class AbstractGeneratorTask : DefaultTask() {
             return javaToKotlinMap[this.asPrimitiveType().type.asString()] ?: throw IllegalStateException("Unknown primitive type: ${this.asPrimitiveType().type.asString()}")
         }
 
-        val resolvedType = this.resolve()
-        if (resolvedType is ResolvedReferenceType) {
-            val fqn = resolvedType.qualifiedName
-            val mappedTypeName = javaToKotlinMap[fqn]
-            val baseTypeName = mappedTypeName ?: ClassName.bestGuess(fqn)
-            if (this is ClassOrInterfaceType && this.typeArguments.isPresent) {
-                val typeArgs = this.typeArguments.get().map { it.toKotlinTypeName(method) }.toTypedArray()
-                return (baseTypeName as ClassName).parameterizedBy(*typeArgs)
-            }
-            return baseTypeName
-        }
         if (this.isTypeParameter) {
             return TypeVariableName(this.asTypeParameter().nameAsString)
         }
 
-        throw IllegalStateException("Unsupported resolved type: ${resolvedType.javaClass.simpleName} (${resolvedType.describe()})")
+        val resolvedType = tryResolve(this, symbolResolver)
+        if (resolvedType == null) {
+            if (this.isClassOrInterfaceType && !this.asClassOrInterfaceType().typeArguments.isPresent) {
+                val typeName = this.toString()
+                return javaToKotlinMap[typeName] ?: ClassName.bestGuess(typeName)
+            }
+            if (symbolResolver == null) throw IllegalStateException("SymbolResolver is required to resolve type '$this', but it was not provided.")
+        }
+        if (resolvedType is ResolvedReferenceType) {
+            val fqn = resolvedType.qualifiedName
+            val baseTypeName = javaToKotlinMap[fqn] ?: ClassName.bestGuess(fqn)
+
+            if (this is ClassOrInterfaceType && this.typeArguments.isPresent) {
+                val typeArgs = this.typeArguments.get().map { it.toKotlinTypeName(method, symbolResolver) }.toTypedArray()
+                return (baseTypeName as ClassName).parameterizedBy(*typeArgs).copy(nullable = baseTypeName.isNullable)
+            }
+            return baseTypeName
+        }
+
+        throw IllegalStateException("Unsupported resolved type: ${resolvedType?.javaClass?.simpleName} (${resolvedType?.describe()})")
+    }
+
+    fun tryResolve(type: Type, symbolResolver: SymbolResolver? = null): ResolvedType? {
+        val cu = type.findCompilationUnit().get()
+        if (!cu.dataKeys.contains(Node.SYMBOL_RESOLVER_KEY) && symbolResolver != null)
+            cu.setData(Node.SYMBOL_RESOLVER_KEY, symbolResolver)
+        else if (symbolResolver == null) return null
+        return type.resolve()
     }
 }
