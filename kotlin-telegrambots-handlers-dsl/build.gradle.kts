@@ -40,9 +40,11 @@ val generateHandlersDsl = tasks.register<GenerateHandlersDslTask>("generateHandl
 tasks.named("compileKotlin") {
     dependsOn(generateHandlersDsl)
 }
-//tasks.named("sourcesJar") {
-//    dependsOn(generateHandlersDsl)
-//}
 tasks.named("kotlinSourcesJar") {
     dependsOn(generateHandlersDsl)
+}
+afterEvaluate {
+    tasks.named("sourcesJar") {
+        dependsOn(generateHandlersDsl)
+    }
 }

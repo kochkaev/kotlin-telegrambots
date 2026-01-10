@@ -2,7 +2,7 @@ import org.gradle.jvm.toolchain.JavaLanguageVersion
 
 plugins {
     kotlin("jvm") version "1.9.22" apply false
-    id("com.vanniktech.maven.publish") version "0.28.0"
+    id("com.vanniktech.maven.publish") version "0.35.0"
 }
 
 allprojects {

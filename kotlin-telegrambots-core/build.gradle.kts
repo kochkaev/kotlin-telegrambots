@@ -67,9 +67,11 @@ val generateDefaultKTelegramClient = tasks.register<GenerateDefaultKTelegramClie
 tasks.named("compileKotlin") {
     dependsOn(generateTelegramClientSuspendable, generateAbstractKTelegramClient, generateDefaultKTelegramClient)
 }
-//tasks.named("sourcesJar") {
-//    dependsOn(generateTelegramClientSuspendable, generateAbstractKTelegramClient, generateDefaultKTelegramClient)
-//}
 tasks.named("kotlinSourcesJar") {
     dependsOn(generateTelegramClientSuspendable, generateAbstractKTelegramClient, generateDefaultKTelegramClient)
+}
+afterEvaluate {
+    tasks.named("sourcesJar") {
+        dependsOn(generateTelegramClientSuspendable, generateAbstractKTelegramClient, generateDefaultKTelegramClient)
+    }
 }

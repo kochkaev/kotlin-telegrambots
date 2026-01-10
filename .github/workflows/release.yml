@@ -21,7 +21,7 @@ jobs:
         id: get_versions
         run: |
           PROJECT_VERSION=$(grep 'projectVersion' gradle.properties | cut -d'=' -f2)
-          TELEGRAM_VERSION=$(grep 'telegramMetaVersion' gradle.properties | cut -d'=' -f2)
+          TELEGRAM_VERSION=$(grep 'telegrambotsVersion' gradle.properties | cut -d'=' -f2)
           TAG_NAME="v${PROJECT_VERSION}+${TELEGRAM_VERSION}"
           echo "Generated tag name: $TAG_NAME"
           echo "TAG_NAME=$TAG_NAME" >> $GITHUB_OUTPUT
