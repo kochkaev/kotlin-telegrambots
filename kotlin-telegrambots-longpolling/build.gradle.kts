@@ -4,6 +4,6 @@ plugins {
 }
 
 dependencies {
-    api(project(":core"))
+    api(project(":kotlin-telegrambots-core"))
     api("org.jetbrains.kotlinx:kotlinx-coroutines-core:${project.property("kotlinxCoroutinesVersion")}")
 }
