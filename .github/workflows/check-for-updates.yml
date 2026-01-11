@@ -15,6 +15,10 @@ jobs:
       - name: Get latest TelegramBots version
         id: get_version
         run: |
+          # Install xmllint, which is required for parsing XML
+          sudo apt-get update
+          sudo apt-get install -y libxml2-utils
+
           # Fetch maven-metadata.xml, which is the source of truth for versions.
           # This is more reliable than the search API.
           METADATA_URL="https://repo1.maven.org/maven2/org/telegram/telegrambots-meta/maven-metadata.xml"
