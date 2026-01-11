@@ -1,7 +1,7 @@
 # Kotlin Coroutine Extensions for TelegramBots
 
 [![Build Status](https://img.shields.io/github/actions/workflow/status/release.yml?branch=main)](https://github.com/kochkaev/kotlin-telegrambots/actions)
-[![Maven Central](https://img.shields.io/maven-central/v/io.github.kochkaev/kotlin-telegrambots.svg?label=Maven%20Central)](https://search.maven.org/search?q=g:io.github.kochkaev%20AND%20a:kotlin-telegrambots)
+[![Maven Central](https://img.shields.io/maven-central/v/io.github.kochkaev/kotlin-telegrambots-meta.svg?label=Maven%20Central)](https://search.maven.org/search?q=g:io.github.kochkaev%20AND%20a:kotlin-telegrambots-meta)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
 A lightweight library that provides a powerful, idiomatic Kotlin layer on top of the popular Java [TelegramBots](https://github.com/rubenlagus/TelegramBots) library. It transforms the original API into a clean, concise, and modern coroutine-based experience.

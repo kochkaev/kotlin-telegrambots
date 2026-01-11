@@ -48,7 +48,11 @@ abstract class GenerateHandlersDslTask : AbstractGeneratorTask() {
             .addImport("kotlinx.coroutines.flow", "filter")
             .addImport("kotlinx.coroutines", "launch")
 
-        val methodNames = classDecl.methods.map { it.nameAsString }.toSet()
+        val methodNames = classDecl.methods
+            .map { it.nameAsString }
+            .filter {
+                it != "hasMessage" // onMessage handler is already defined in HandlersScope.kt
+            } .toSet()
         var functionsGenerated = 0
 
         classDecl.fields.forEach { field ->
