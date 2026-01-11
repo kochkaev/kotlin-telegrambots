@@ -72,12 +72,17 @@ fun HandlersScope.onUpdate(handler: suspend TelegramClient.(Update) -> Unit) {
     }
 }
 
+private val clientRegisteredCommands = WeakHashMap<TelegramClient, MutableList<String>>()
+val TelegramClient.registeredCommands: MutableList<String>
+    get() = clientRegisteredCommands.getOrPut(this) { mutableListOf() }
+
 /**
  * Registers a handler for commands.
  * A command is a message that starts with "/".
  */
 fun HandlersScope.onCommand(command: String, handler: suspend TelegramClient.(Message) -> Unit) {
     coroutine.launch {
+        client.registeredCommands += command
         val botUsername = client.me.userName
         val cmdRegex = if (botUsername != null) {
             Regex("^/$command(@$botUsername)?(?:\\s+(.+))?$", RegexOption.IGNORE_CASE)
@@ -87,6 +92,25 @@ fun HandlersScope.onCommand(command: String, handler: suspend TelegramClient.(Me
 
         sourceFlow.filter {
             it.hasMessage() && it.message.isCommand && it.message.text.matches(cmdRegex)
+        }.collect { with(client) { handler(it.message) } }
+    }
+}
+
+/**
+ * Registers a handler for message.
+ */
+fun HandlersScope.onMessage(handler: suspend TelegramClient.(Message) -> Unit) {
+    coroutine.launch {
+        val botUsername = client.me.userName
+        val commandPattern = client.registeredCommands.joinToString("|") { Regex.escape(it) }
+        val cmdRegex = if (botUsername != null) {
+            Regex("^/(?:$commandPattern)(@$botUsername)?(?:\\s+(.+))?$", RegexOption.IGNORE_CASE)
+        } else {
+            Regex("^/(?:$commandPattern)(?:\\s+(.+))?$", RegexOption.IGNORE_CASE)
+        }
+
+        sourceFlow.filter {
+            it.hasMessage() && !it.message.isCommand && !it.message.text.matches(cmdRegex)
         }.collect { with(client) { handler(it.message) } }
     }
 }

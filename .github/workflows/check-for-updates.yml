@@ -15,20 +15,17 @@ jobs:
       - name: Get latest TelegramBots version
         id: get_version
         run: |
-          # Retry up to 5 times if the response is invalid
-          for attempt in {1..5}; do
-            JSON_RESPONSE=$(curl -s "https://search.maven.org/solrsearch/select?q=g:%22org.telegram%22+AND+a:%22telegrambots%22&meta=gav&rows=1&wt=json")
-            if echo "$JSON_RESPONSE" | jq -e . >/dev/null 2>&1; then
-              LATEST_VERSION=$(echo "$JSON_RESPONSE" | jq -r '.response.docs[0].v')
-              break
-            else
-              echo "Attempt $attempt: Invalid JSON response from Maven Central, retrying..."
-              sleep 5
-            fi
-          done
-          if [ -z "$LATEST_VERSION" ] || [ "$LATEST_VERSION" == "null" ]; then
-            echo "Error: Could not extract latest version from Maven Central response"
-            echo "$JSON_RESPONSE"
+          # Fetch maven-metadata.xml, which is the source of truth for versions.
+          # This is more reliable than the search API.
+          METADATA_URL="https://repo1.maven.org/maven2/org/telegram/telegrambots-meta/maven-metadata.xml"
+          XML_RESPONSE=$(curl -s "$METADATA_URL")
+          
+          # Use xmllint (a standard XML tool) to parse the <release> tag.
+          LATEST_VERSION=$(echo "$XML_RESPONSE" | xmllint --xpath "string(/metadata/versioning/release)" -)
+          
+          if [ -z "$LATEST_VERSION" ]; then
+            echo "Error: Could not extract latest version from $METADATA_URL"
+            echo "Response: $XML_RESPONSE"
             exit 1
           fi
           echo "Latest version on Maven Central: $LATEST_VERSION"
