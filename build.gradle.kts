@@ -5,10 +5,6 @@ plugins {
     id("com.vanniktech.maven.publish") version "0.35.0"
 }
 
-mavenPublishing {
-    coordinates("io.github.kochkaev", "kotlin-telegrambots", "${property("projectVersion") as String}+${property("telegrambotsVersion") as String}")
-}
-
 allprojects {
     group = "io.github.kochkaev"
     version = "${property("projectVersion") as String}+${property("telegrambotsVersion") as String}"
