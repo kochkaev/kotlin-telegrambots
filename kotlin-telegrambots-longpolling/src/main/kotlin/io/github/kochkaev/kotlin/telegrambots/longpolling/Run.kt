@@ -14,10 +14,10 @@ import java.net.SocketTimeoutException
 import java.util.concurrent.TimeoutException
 
 fun KTelegramClient.runLongPolling(
-    coroutineScope: CoroutineScope = CoroutineScope(Dispatchers.IO),
     timeout: Int = 60,
     pollingDelay: Long = 1000,
     errorDelay: Long = 5000,
+    coroutineScope: CoroutineScope = CoroutineScope(Dispatchers.IO),
 ) {
     startSession(coroutineScope.launch {
         deleteWebhook(false)

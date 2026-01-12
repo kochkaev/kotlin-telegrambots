@@ -65,7 +65,7 @@ jobs:
           
           gh pr create --title "build: Bump telegrambots version to ${{ steps.get_version.outputs.LATEST_VERSION }}" --body "Automated PR to update the TelegramBots dependency." --base main
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GH_PAT }}
 
       - name: No update needed
         if: steps.get_version.outputs.LATEST_VERSION == steps.get_current_version.outputs.CURRENT_VERSION

@@ -1,7 +1,7 @@
 import org.gradle.jvm.toolchain.JavaLanguageVersion
 
 plugins {
-    kotlin("jvm") version "1.9.22" apply false
+    kotlin("jvm") version "1.9.22"
     id("com.vanniktech.maven.publish") version "0.35.0"
 }
 
@@ -31,6 +31,17 @@ subprojects {
         kotlinOptions {
             jvmTarget = "17"
         }
+    }
+
+    dependencies {
+        testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
+        testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3")
+        testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
+        testImplementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.15.2")
+    }
+
+    tasks.withType<Test> {
+        useJUnitPlatform()
     }
 
     afterEvaluate {

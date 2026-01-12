@@ -7,5 +7,5 @@ plugins {
 
 dependencies {
     api(project(":kotlin-telegrambots-core"))
-    implementation("com.squareup.okhttp3:okhttp:$okhttpVersion")
+    api("com.squareup.okhttp3:okhttp:$okhttpVersion")
 }

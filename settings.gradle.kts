@@ -20,5 +20,6 @@ include(
     ":kotlin-telegrambots-handlers-dsl",
     ":kotlin-telegrambots-core",
     ":kotlin-telegrambots-longpolling",
+    ":kotlin-telegrambots-webhook",
     ":kotlin-telegrambots-client-okhttp"
 )

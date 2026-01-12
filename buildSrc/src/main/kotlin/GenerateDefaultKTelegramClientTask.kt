@@ -91,9 +91,9 @@ abstract class GenerateDefaultKTelegramClientTask : AbstractReflectionGeneratorT
             .primaryConstructor(constructor)
             .addProperty(PropertySpec.builder("token", String::class, KModifier.OVERRIDE).initializer("token").build())
             .addProperty(PropertySpec.builder("telegramUrl", TelegramUrl::class, KModifier.OVERRIDE).initializer("telegramUrl").build())
-            .addProperty(PropertySpec.builder("executor", httpExecutor, KModifier.PROTECTED).initializer("executor").build())
-            .addProperty(PropertySpec.builder("serializer", botSerializer, KModifier.PROTECTED).initializer("serializer").build())
-            .addProperty(PropertySpec.builder("deserializer", botDeserializer, KModifier.PROTECTED).initializer("deserializer").build())
+            .addProperty(PropertySpec.builder("executor", httpExecutor, KModifier.OVERRIDE).initializer("executor").build())
+            .addProperty(PropertySpec.builder("serializer", botSerializer, KModifier.OVERRIDE).initializer("serializer").build())
+            .addProperty(PropertySpec.builder("deserializer", botDeserializer, KModifier.OVERRIDE).initializer("deserializer").build())
 
         // Generic executeAsync for simple JSON methods
         val t = TypeVariableName("T", Serializable::class)

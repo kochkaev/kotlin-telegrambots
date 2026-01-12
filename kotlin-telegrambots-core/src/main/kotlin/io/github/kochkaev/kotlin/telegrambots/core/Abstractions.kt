@@ -13,10 +13,20 @@ interface KTelegramBot {
 }
 
 /**
+ * Defines the core components required for a modular Telegram client.
+ * This includes an HTTP executor, a serializer, and a deserializer.
+ */
+interface ModularTelegramClient {
+    val executor: HttpExecutor
+    val serializer: BotSerializer
+    val deserializer: BotDeserializer
+}
+
+/**
  * The main, all-encompassing client interface for our library.
  * It combines the official TelegramClient with our own base bot and file downloading capabilities.
  */
-interface KTelegramClient : KTelegramBot, TelegramClientSuspendable
+interface KTelegramClient : KTelegramBot, ModularTelegramClient, TelegramClientSuspendable
 
 
 sealed interface Part {
@@ -54,4 +64,23 @@ interface HttpExecutor {
      * @return A CompletableFuture with the InputStream of the file content.
      */
     fun downloadFile(url: String): CompletableFuture<InputStream>
+
+    /**
+     * Starts a server to receive webhook updates.
+     * @param port The port to listen on.
+     * @param secretToken The secret token to check for in the X-Telegram-Bot-Api-Secret-Token header.
+     * @param onUpdate A callback to be invoked for each update.
+     * @return A Stoppable object that can be used to stop the server.
+     */
+    fun startServer(port: Int, secretToken: String?, onUpdate: (String) -> Unit): Stoppable
+}
+
+/**
+ * An interface for objects that can be stopped.
+ */
+interface Stoppable {
+    /**
+     * Stops the object.
+     */
+    fun stop()
 }
