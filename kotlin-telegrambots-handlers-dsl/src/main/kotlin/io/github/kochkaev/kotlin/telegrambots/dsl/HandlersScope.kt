@@ -110,7 +110,7 @@ fun HandlersScope.onMessage(handler: suspend TelegramClient.(Message) -> Unit) {
         }
 
         sourceFlow.filter {
-            it.hasMessage() && !it.message.isCommand && !it.message.text.matches(cmdRegex)
+            it.hasMessage() && !it.message.isCommand && it.message.text?.matches(cmdRegex) != true
         }.collect { with(client) { handler(it.message) } }
     }
 }
